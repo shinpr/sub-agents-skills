@@ -17,10 +17,7 @@ This repository provides the **Agent Skills** version. There's also an [MCP vers
 | **Session management** | No | Yes |
 | **Runtime dependency** | Python | Node.js |
 
-**Quick decision:**
-- Using **Codex**? → Use this Skills version
-- Using **Cursor, Claude Desktop, or Windsurf**? → Use [MCP version](https://github.com/shinpr/sub-agents-mcp)
-- Using **Claude Code**? → It has built-in sub-agents. Use this only if you want portable agent definitions.
+Note: Claude Code has built-in sub-agents. Use this skill only if you want portable agent definitions that work across tools.
 
 ## Why?
 
