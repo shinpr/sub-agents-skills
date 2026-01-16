@@ -238,23 +238,21 @@ class TestExecuteAgent:
     def test_returns_error_when_cli_executable_not_found(self):
         """Should return error status when CLI executable is not in PATH"""
         # Mock build_command to return a non-existent executable
-        with (
-            patch(
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch(
                 "run_subagent.build_command",
                 return_value=("nonexistent-cli-12345", ["arg1"]),
-            ),
-            tempfile.TemporaryDirectory() as tmpdir,
-        ):
-            result = execute_agent(
-                cli="codex",  # Valid CLI name, but build_command is mocked
-                system_context="test context",
-                prompt="test prompt",
-                cwd=tmpdir,
-                timeout=5000,
-            )
-            assert result["status"] == "error"
-            assert result["exit_code"] == 127
-            assert "not found" in result["error"].lower()
+            ):
+                result = execute_agent(
+                    cli="codex",  # Valid CLI name, but build_command is mocked
+                    system_context="test context",
+                    prompt="test prompt",
+                    cwd=tmpdir,
+                    timeout=5000,
+                )
+                assert result["status"] == "error"
+                assert result["exit_code"] == 127
+                assert "not found" in result["error"].lower()
 
     def test_formats_prompt_with_system_context(self):
         """Should combine system context and user prompt"""
@@ -263,21 +261,19 @@ class TestExecuteAgent:
         mock_process.communicate.return_value = ("", "")
         mock_process.returncode = 0
 
-        with (
-            patch("subprocess.Popen", return_value=mock_process) as mock_popen,
-            tempfile.TemporaryDirectory() as tmpdir,
-        ):
-            execute_agent(
-                cli="codex",
-                system_context="System instructions",
-                prompt="User task",
-                cwd=tmpdir,
-                timeout=5000,
-            )
-            # Verify the prompt was formatted correctly
-            call_args = mock_popen.call_args[0][0]
-            prompt_arg = call_args[-1]  # Last argument is the prompt
-            assert "[System Context]" in prompt_arg
-            assert "System instructions" in prompt_arg
-            assert "[User Prompt]" in prompt_arg
-            assert "User task" in prompt_arg
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch("subprocess.Popen", return_value=mock_process) as mock_popen:
+                execute_agent(
+                    cli="codex",
+                    system_context="System instructions",
+                    prompt="User task",
+                    cwd=tmpdir,
+                    timeout=5000,
+                )
+                # Verify the prompt was formatted correctly
+                call_args = mock_popen.call_args[0][0]
+                prompt_arg = call_args[-1]  # Last argument is the prompt
+                assert "[System Context]" in prompt_arg
+                assert "System instructions" in prompt_arg
+                assert "[User Prompt]" in prompt_arg
+                assert "User task" in prompt_arg
