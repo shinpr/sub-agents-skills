@@ -3,8 +3,8 @@
 run_subagent.py - Execute external CLI AIs as sub-agents
 
 Usage:
-    python scripts/run_subagent.py --agent <name> --prompt "<task>" --cwd <path>
-    python scripts/run_subagent.py --list
+    scripts/run_subagent.py --agent <name> --prompt "<task>" --cwd <path>
+    scripts/run_subagent.py --list
 
 Supported CLIs: claude, cursor-agent, codex, gemini
 
@@ -302,7 +302,7 @@ def build_command(cli: str, prompt: str) -> tuple[str, list]:
 
 
 def execute_agent(
-    cli: str, system_context: str, prompt: str, cwd: str, timeout: int = 300000
+    cli: str, system_context: str, prompt: str, cwd: str, timeout: int = 600000
 ) -> dict:
     """
     Execute agent CLI and return result.
@@ -375,7 +375,10 @@ def execute_agent(
                 "cli": cli,
             }
             if status == "error":
-                response["error"] = f"CLI exited with code {exit_code}, no result returned"
+                error_msg = f"CLI exited with code {exit_code}"
+                if stderr and stderr.strip():
+                    error_msg += f": {stderr.strip()}"
+                response["error"] = error_msg
             return response
 
         except Exception as e:
@@ -414,7 +417,7 @@ def main():
     parser.add_argument("--cwd", help="Working directory (absolute path)")
     parser.add_argument("--agents-dir", help="Directory containing agent definitions")
     parser.add_argument(
-        "--timeout", type=int, default=300000, help="Timeout in ms (default: 300000)"
+        "--timeout", type=int, default=600000, help="Timeout in ms (default: 600000)"
     )
     parser.add_argument("--cli", help="Force specific CLI (claude, cursor-agent, codex, gemini)")
 

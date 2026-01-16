@@ -287,7 +287,7 @@ To customize: `export SUB_AGENTS_DIR=/custom/path`
 | `--agent` | Yes* | Agent definition name from --list |
 | `--prompt` | Yes* | Task description to delegate |
 | `--cwd` | Yes* | Working directory (absolute path) |
-| `--timeout` | No | Timeout ms (default: 300000) |
+| `--timeout` | No | Timeout ms (default: 600000) |
 | `--cli` | No | Force CLI: `claude`, `cursor-agent`, `codex`, `gemini` |
 
 *Required when not using --list
