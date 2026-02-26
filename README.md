@@ -2,55 +2,53 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Bring Claude Code–style sub-agents to any Agent Skills-compatible tool.
+**Orchestrate any LLM as a sub-agent from any AI coding tool.**
 
-This skill lets you define task-specific AI agents (like "test-writer" or "code-reviewer") in markdown files, and execute them via Codex, Cursor CLI, Gemini CLI, or Claude Code backends.
+Use Claude, Codex, Cursor, and Gemini CLI as sub-agents within a single workflow — regardless of which tool you're running. Define task-specific agents once in markdown, and execute them on any backend.
 
-## Which Version Should I Use?
-
-This repository provides the **Agent Skills** version. There's also an [MCP version](https://github.com/shinpr/sub-agents-mcp).
-
-| | Skills (this repo) | MCP |
-|---|---|---|
-| **Best for** | Codex | Cursor, Claude Desktop, Windsurf |
-| **Setup** | Copy files | Configure mcp.json |
-| **Session management** | No | Yes |
-| **Runtime dependency** | Python | Node.js |
-
-Note: Claude Code has built-in sub-agents. Use this skill only if you want portable agent definitions that work across tools.
+```mermaid
+graph LR
+    A["Your AI tool<br/>(Claude Code, Codex, Cursor...)"] --> B["run_subagent.py"]
+    B --> C["Claude CLI"]
+    B --> D["Codex CLI"]
+    B --> E["Cursor CLI"]
+    B --> F["Gemini CLI"]
+    style B fill:#f5f5f5,stroke:#333
+```
 
 ## Why?
 
-Claude Code offers powerful sub-agent workflows—but they're limited to its own environment. This skill makes that workflow portable through the Agent Skills standard, so any compatible tool can use the same agents.
+Most major AI coding agents now have built-in sub-agents — but only for their own model. Claude Code delegates to Claude. Codex delegates to GPT. None of them let you call a competitor's model.
 
-- Define agents once, reuse across tools
-- Team members can share agents regardless of IDE
-- No MCP server—just a Python script
+This skill removes that restriction:
 
-## Table of Contents
+- **Cross-LLM orchestration** — Use Claude for long-chain reasoning, Codex for fast refactors, and Gemini for large-context analysis, all from the same parent session.
+- **No vendor lock-in** — Your agent definitions are plain markdown files that work across any Agent Skills-compatible tool, so switching IDEs or LLM providers doesn't mean rewriting your workflow.
+- **Bring Your Own Model** — Choose which model handles each task and pay each provider directly at their API rates.
+- **Team portability** — Share agent definitions across your team regardless of IDE or preferred LLM.
 
-- [Which Version Should I Use?](#which-version-should-i-use)
-- [Prerequisites](#prerequisites)
-- [Quick Start](#quick-start)
-- [Usage Examples](#usage-examples)
-- [Writing Effective Agents](#writing-effective-agents)
-- [Agent Examples](#agent-examples)
-- [Configuration Reference](#configuration-reference)
-- [Troubleshooting](#troubleshooting)
-- [Design Philosophy](#design-philosophy)
-- [How It Works](#how-it-works)
+<details>
+<summary><strong>Coming from the MCP version?</strong></summary>
 
-## Prerequisites
+This repository replaces [sub-agents-mcp](https://github.com/shinpr/sub-agents-mcp) with a simpler approach: no server process, no Node.js dependency, just Python and file copies. If you're currently using the MCP version, migration is straightforward — your existing `.agents/` definitions work as-is.
+</details>
 
-- Python 3.10 or higher
-- One of these execution engines (they actually run the sub-agents):
-  - `codex` CLI (from Codex)
-  - `cursor-agent` CLI (from Cursor)
-  - `gemini` CLI (from Gemini CLI)
-  - `claude` CLI (from Claude Code)
-- An Agent Skills-compatible tool (Codex, Claude Code, etc.)
+## Supported Backends
+
+Each agent definition specifies which CLI runs it via the `run-agent` frontmatter. You can mix backends freely within a project.
+
+| Backend | CLI Command | Install |
+|---------|-------------|---------|
+| **Codex** (OpenAI) | `codex` | `npm install -g @openai/codex` |
+| **Claude** (Anthropic) | `claude` | `npm install -g @anthropic-ai/claude-code` |
+| **Cursor** | `cursor-agent` | `curl https://cursor.com/install -fsS \| bash` |
+| **Gemini** (Google) | `gemini` | `npm install -g @google/gemini-cli` |
+
+You only need to install the backends you plan to use.
 
 ## Quick Start
+
+**Requirements:** Python 3.10+ and at least one [supported backend](#supported-backends) installed.
 
 ### 1. Install the Skill
 
@@ -59,7 +57,7 @@ Claude Code offers powerful sub-agent workflows—but they're limited to its own
 # For Codex
 curl -fsSL https://raw.githubusercontent.com/shinpr/sub-agents-skills/main/install.sh | bash -s -- --target ~/.codex/skills
 
-# For Claude Code (already has built-in sub-agents, but you can use this for custom definitions)
+# For Claude Code
 curl -fsSL https://raw.githubusercontent.com/shinpr/sub-agents-skills/main/install.sh | bash -s -- --target ~/.claude/skills
 ```
 
@@ -93,44 +91,9 @@ Review code for quality and maintainability issues.
 - Issues listed with explanations
 ```
 
-The `run-agent` frontmatter specifies which CLI executes this agent (`codex`, `claude`, `cursor-agent`, or `gemini`). See [Writing Effective Agents](#writing-effective-agents) for more on agent design.
+The `run-agent` frontmatter specifies which CLI executes this agent. See [Writing Effective Agents](#writing-effective-agents) for more on agent design.
 
-### 3. Install Your Execution Engine
-
-Pick one based on which CLI you want sub-agents to use:
-
-**For Codex users:**
-```bash
-npm install -g @openai/codex
-```
-
-**For Cursor users:**
-```bash
-# Install Cursor CLI (includes cursor-agent)
-curl https://cursor.com/install -fsS | bash
-
-# Authenticate (required before first use)
-cursor-agent login
-```
-
-**For Gemini CLI users:**
-```bash
-npm install -g @google/gemini-cli
-
-# Authenticate via browser (required before first use)
-gemini
-```
-
-**For Claude Code users:**
-```bash
-# Option 1: Native install (recommended)
-curl -fsSL https://claude.ai/install.sh | bash
-
-# Option 2: NPM (requires Node.js 18+)
-npm install -g @anthropic-ai/claude-code
-```
-
-### 4. Fix "Permission Denied" Errors When Running Shell Commands
+### 3. Fix "Permission Denied" Errors When Running Shell Commands
 
 Sub-agents may fail to execute shell commands with permission errors. This happens because sub-agents can't respond to interactive permission prompts.
 
@@ -146,11 +109,11 @@ Sub-agents may fail to execute shell commands with permission errors. This happe
 
 2. When prompted to allow commands (e.g., "Add Shell(cd), Shell(make) to allowlist?"), approve them
 
-3. This automatically updates your configuration file, and those commands will now work when invoked via sub-agents
+3. Approving updates your configuration file, so those commands will work when invoked via sub-agents
 
 ## Usage Examples
 
-Just tell your AI to use an agent:
+To run an agent, describe the task in your prompt:
 
 ```
 "Use the code-reviewer agent to check my UserService class"
@@ -164,14 +127,24 @@ Just tell your AI to use an agent:
 "Use the doc-writer agent to add JSDoc comments to all public methods"
 ```
 
-Your AI automatically invokes the specialized agent and returns results.
+The host tool invokes the agent and returns results.
 
-**Tip:** Always include *what you want done* in your request—not just which agent to use. For example:
+**Mixing backends in one project:**
 
-- ✅ "Use the code-reviewer agent **to check my UserService class**"
-- ❌ "Use the code-reviewer agent" (too vague—the agent won't know what to review)
+You can have agents that use different LLMs side by side:
 
-The more specific your task, the better the results.
+```
+.agents/
+├── code-reviewer.md    # run-agent: claude  (strong reasoning)
+├── test-writer.md      # run-agent: codex   (fast generation)
+└── doc-writer.md       # run-agent: gemini  (large context window)
+```
+
+```
+"Use the code-reviewer agent to find security issues, then use the test-writer agent to add tests for the fixes"
+```
+
+**Tip:** Always include *what you want done* in your request—not just which agent to use. Specific prompts get better results.
 
 ## Writing Effective Agents
 
@@ -179,8 +152,8 @@ The more specific your task, the better the results.
 
 Each agent should do **one thing well**. Avoid "swiss army knife" agents.
 
-| ✅ Good | ❌ Bad |
-|---------|--------|
+| Good | Bad |
+|------|-----|
 | Reviews code for security issues | Reviews code, writes tests, and refactors |
 | Writes unit tests for a module | Writes tests and fixes bugs it finds |
 
@@ -342,19 +315,9 @@ This means each call has some startup overhead, but you get predictable behavior
 
 The main agent stays lightweight too. It coordinates work without accumulating all the sub-agent context in its own window.
 
-### Skills vs MCP
+### Agent Skills as an Open Standard
 
-This skill does the same thing as [sub-agents-mcp](https://github.com/shinpr/sub-agents-mcp), just packaged differently.
-
-Skills version:
-- No server process, just copy files
-- Python only (no Node.js)
-- No session management
-
-MCP version:
-- Requires mcp.json config
-- Has session management for multi-turn workflows
-- Broader client support currently
+This skill uses the [Agent Skills](https://github.com/anthropics/skills) format—a convention for packaging reusable AI agent capabilities as portable files. The format is supported by Claude Code, Codex, and other Agent Skills-compatible tools, so the same skill works across environments without modification.
 
 ## How It Works
 
