@@ -26,13 +26,6 @@ This skill removes that restriction:
 - **No vendor lock-in** — Your agent definitions are plain markdown files that work with Codex, Claude Code, Cursor CLI, Gemini CLI, VS Code, and [30+ other tools](https://agentskills.io) that support the Agent Skills format, so switching IDEs or LLM providers doesn't mean rewriting your workflow.
 - **Bring Your Own Model** — Choose which model handles each task and pay each provider directly at their API rates.
 - **Team portability** — Share agent definitions across your team regardless of IDE or preferred LLM.
-
-<details>
-<summary><strong>Coming from the MCP version?</strong></summary>
-
-This repository replaces [sub-agents-mcp](https://github.com/shinpr/sub-agents-mcp) with a simpler approach: no server process, no Node.js dependency, just Python and file copies. If you're currently using the MCP version, migration is straightforward — your existing `.agents/` definitions work as-is.
-</details>
-
 ## Supported Backends
 
 Each agent definition specifies which CLI runs it via the `run-agent` frontmatter. You can mix backends freely within a project.
