@@ -50,6 +50,74 @@ No frontmatter here.
         assert body == content
 
 
+class TestLoadAgentRejectsInvalidNames:
+    """load_agent should reject names that could escape the agents directory."""
+
+    def _make_agents_dir(self, tmpdir):
+        agents_dir = Path(tmpdir) / "agents"
+        agents_dir.mkdir()
+        (agents_dir / "valid-agent.md").write_text("# Valid\n\nA valid agent.")
+        return str(agents_dir)
+
+    # --- Valid names load successfully ---
+
+    def test_loads_simple_hyphenated_name(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            agents_dir = self._make_agents_dir(tmpdir)
+            _, context, _ = load_agent(agents_dir, "valid-agent")
+            assert "Valid" in context
+
+    # --- Path traversal attempts are rejected ---
+
+    def test_rejects_parent_directory_traversal(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            agents_dir = self._make_agents_dir(tmpdir)
+            with pytest.raises(ValueError, match="Invalid agent name"):
+                load_agent(agents_dir, "../etc/passwd")
+
+    def test_rejects_nested_traversal(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            agents_dir = self._make_agents_dir(tmpdir)
+            with pytest.raises(ValueError, match="Invalid agent name"):
+                load_agent(agents_dir, "../../secret")
+
+    def test_rejects_absolute_path(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            agents_dir = self._make_agents_dir(tmpdir)
+            with pytest.raises(ValueError, match="Invalid agent name"):
+                load_agent(agents_dir, "/etc/passwd")
+
+    def test_rejects_forward_slash(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            agents_dir = self._make_agents_dir(tmpdir)
+            with pytest.raises(ValueError, match="Invalid agent name"):
+                load_agent(agents_dir, "sub/agent")
+
+    def test_rejects_backslash(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            agents_dir = self._make_agents_dir(tmpdir)
+            with pytest.raises(ValueError, match="Invalid agent name"):
+                load_agent(agents_dir, "sub\\agent")
+
+    def test_rejects_empty_string(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            agents_dir = self._make_agents_dir(tmpdir)
+            with pytest.raises(ValueError, match="Invalid agent name"):
+                load_agent(agents_dir, "")
+
+    def test_rejects_shell_metacharacters(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            agents_dir = self._make_agents_dir(tmpdir)
+            with pytest.raises(ValueError, match="Invalid agent name"):
+                load_agent(agents_dir, "agent;rm -rf")
+
+    def test_rejects_leading_dot(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            agents_dir = self._make_agents_dir(tmpdir)
+            with pytest.raises(ValueError, match="Invalid agent name"):
+                load_agent(agents_dir, ".hidden")
+
+
 class TestLoadAgent:
     def test_load_agent_md(self):
         with tempfile.TemporaryDirectory() as tmpdir:

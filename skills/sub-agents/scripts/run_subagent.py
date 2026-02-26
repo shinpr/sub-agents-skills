@@ -12,6 +12,8 @@ Environment:
     SUB_AGENTS_DIR: Override default agents directory ({cwd}/.agents/)
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import os
@@ -59,18 +61,36 @@ def extract_description(body: str) -> str:
     return ""
 
 
+_AGENT_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$")
+
+
+def validate_agent_name(agent_name: str) -> str:
+    """
+    Validate agent name to prevent path traversal.
+    Returns the name if valid, raises ValueError otherwise.
+    """
+    if not agent_name or not _AGENT_NAME_PATTERN.match(agent_name):
+        raise ValueError(f"Invalid agent name: {agent_name!r}")
+    return agent_name
+
+
 def load_agent(agents_dir: str, agent_name: str) -> tuple[str | None, str, str]:
     """
     Load agent definition file and extract run-agent setting.
     Returns (run_agent_cli, system_context, description)
     """
+    validate_agent_name(agent_name)
     agents_path = Path(agents_dir)
 
     # Try .md first, then .txt
     for ext in [".md", ".txt"]:
         agent_file = agents_path / f"{agent_name}{ext}"
-        if agent_file.exists():
-            content = agent_file.read_text(encoding="utf-8")
+        # Defense in depth: verify resolved path stays within agents_dir
+        resolved = agent_file.resolve()
+        if not str(resolved).startswith(str(agents_path.resolve())):
+            raise ValueError(f"Invalid agent name: {agent_name!r}")
+        if resolved.exists():
+            content = resolved.read_text(encoding="utf-8")
             frontmatter, body = parse_frontmatter(content)
 
             run_agent = frontmatter.get("run-agent")

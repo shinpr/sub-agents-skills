@@ -23,7 +23,7 @@ Most major AI coding agents now have built-in sub-agents — but only for their 
 This skill removes that restriction:
 
 - **Cross-LLM orchestration** — Use Claude for long-chain reasoning, Codex for fast refactors, and Gemini for large-context analysis, all from the same parent session.
-- **No vendor lock-in** — Your agent definitions are plain markdown files that work across any Agent Skills-compatible tool, so switching IDEs or LLM providers doesn't mean rewriting your workflow.
+- **No vendor lock-in** — Your agent definitions are plain markdown files that work with Codex, Claude Code, Cursor, Gemini CLI, VS Code, and [30+ other tools](https://agentskills.io) that support the Agent Skills format, so switching IDEs or LLM providers doesn't mean rewriting your workflow.
 - **Bring Your Own Model** — Choose which model handles each task and pay each provider directly at their API rates.
 - **Team portability** — Share agent definitions across your team regardless of IDE or preferred LLM.
 
@@ -48,7 +48,7 @@ You only need to install the backends you plan to use.
 
 ## Quick Start
 
-**Requirements:** Python 3.10+ and at least one [supported backend](#supported-backends) installed.
+**Requirements:** Python 3.9+ and at least one [supported backend](#supported-backends) installed.
 
 ### 1. Install the Skill
 
@@ -317,7 +317,7 @@ The main agent stays lightweight too. It coordinates work without accumulating a
 
 ### Agent Skills as an Open Standard
 
-This skill uses the [Agent Skills](https://github.com/anthropics/skills) format—a convention for packaging reusable AI agent capabilities as portable files. The format is supported by Claude Code, Codex, and other Agent Skills-compatible tools, so the same skill works across environments without modification.
+This skill uses the [Agent Skills](https://agentskills.io) format—a convention for packaging reusable AI agent capabilities as portable files. The format is supported by Codex, Claude Code, Cursor, Gemini CLI, and [30+ other tools](https://agentskills.io), so the same skill works across environments without modification.
 
 ## How It Works
 
@@ -329,7 +329,7 @@ skills/sub-agents/
 ├── scripts/
 │   └── run_subagent.py   # Calls external CLIs
 └── references/
-    └── cli-formats.md    # CLI output format docs
+    └── codex.md          # Codex-specific setup docs
 ```
 
 ## License

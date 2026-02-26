@@ -1,6 +1,6 @@
 ---
 name: sub-agents
-description: Execute external CLI AIs as isolated sub-agents for task delegation, parallel processing, and context separation. Use when delegating complex multi-step tasks, running parallel investigations, needing fresh context without current conversation history, or leveraging specialized agent definitions. Returns structured JSON with agent output, exit code, and execution status.
+description: Run agent definitions as sub-agents. Use when the user names an agent or sub-agent to run, references an agent definition, or delegates a task to an agent.
 allowed-tools: Bash Read
 ---
 
@@ -39,14 +39,6 @@ Extract parameters from user's natural language request:
 **Example**:
 "Run code-reviewer on src/"
 → `--agent code-reviewer --prompt "Review src/" --cwd $(pwd)`
-
-## When to Use This Skill
-
-**Use sub-agent when ANY of these apply:**
-- Complex multi-step task (isolated context prevents interference)
-- Parallel investigation (multiple agents can run simultaneously)
-- Task needs fresh context (sub-agent starts without conversation history)
-- Specialized agent definition exists (leverage pre-defined expert prompts)
 
 ## Important: Permission and Timeout
 
@@ -158,7 +150,7 @@ What this agent does.
 How results should be structured.
 ```
 
-**Critical**: The `run-agent` frontmatter determines which CLI executes the agent. See [cli-formats.md](references/cli-formats.md) for CLI-specific behaviors.
+**Critical**: The `run-agent` frontmatter determines which CLI executes the agent.
 
 ## CLI Selection Priority
 
