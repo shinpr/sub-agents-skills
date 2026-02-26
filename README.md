@@ -4,13 +4,13 @@
 
 **Orchestrate any LLM as a sub-agent from any AI coding tool.**
 
-Use Claude, Codex, Cursor, and Gemini CLI as sub-agents within a single workflow — regardless of which tool you're running. Define task-specific agents once in markdown, and execute them on any backend.
+Use Codex, Claude Code, Cursor CLI, and Gemini CLI as sub-agents within a single workflow — regardless of which tool you're running. Define task-specific agents once in markdown, and execute them on any backend.
 
 ```mermaid
 graph LR
-    A["Your AI tool<br/>(Claude Code, Codex, Cursor...)"] --> B["run_subagent.py"]
-    B --> C["Claude CLI"]
-    B --> D["Codex CLI"]
+    A["Your AI tool<br/>(Codex, Claude Code, Cursor...)"] --> B["run_subagent.py"]
+    B --> C["Codex"]
+    B --> D["Claude Code"]
     B --> E["Cursor CLI"]
     B --> F["Gemini CLI"]
     style B fill:#f5f5f5,stroke:#333
@@ -22,8 +22,8 @@ Most major AI coding agents now have built-in sub-agents — but only for their 
 
 This skill removes that restriction:
 
-- **Cross-LLM orchestration** — Use Claude for long-chain reasoning, Codex for fast refactors, and Gemini for large-context analysis, all from the same parent session.
-- **No vendor lock-in** — Your agent definitions are plain markdown files that work with Codex, Claude Code, Cursor, Gemini CLI, VS Code, and [30+ other tools](https://agentskills.io) that support the Agent Skills format, so switching IDEs or LLM providers doesn't mean rewriting your workflow.
+- **Cross-LLM orchestration** — Use Codex for fast refactors, Claude Code for long-chain reasoning, and Gemini CLI for large-context analysis, all from the same parent session.
+- **No vendor lock-in** — Your agent definitions are plain markdown files that work with Codex, Claude Code, Cursor CLI, Gemini CLI, VS Code, and [30+ other tools](https://agentskills.io) that support the Agent Skills format, so switching IDEs or LLM providers doesn't mean rewriting your workflow.
 - **Bring Your Own Model** — Choose which model handles each task and pay each provider directly at their API rates.
 - **Team portability** — Share agent definitions across your team regardless of IDE or preferred LLM.
 
@@ -40,7 +40,7 @@ Each agent definition specifies which CLI runs it via the `run-agent` frontmatte
 | Backend | CLI Command | Install |
 |---------|-------------|---------|
 | **Codex** (OpenAI) | `codex` | `npm install -g @openai/codex` |
-| **Claude** (Anthropic) | `claude` | `npm install -g @anthropic-ai/claude-code` |
+| **Claude Code** (Anthropic) | `claude` | `curl -fsSL https://claude.ai/install.sh \| bash` |
 | **Cursor** | `cursor-agent` | `curl https://cursor.com/install -fsS \| bash` |
 | **Gemini** (Google) | `gemini` | `npm install -g @google/gemini-cli` |
 
@@ -102,9 +102,9 @@ Sub-agents may fail to execute shell commands with permission errors. This happe
 1. Run your CLI tool directly with the task you want sub-agents to handle:
    ```bash
    codex           # For Codex users
-   cursor-agent    # For Cursor users
-   gemini          # For Gemini CLI users
    claude          # For Claude Code users
+   cursor-agent    # For Cursor CLI users
+   gemini          # For Gemini CLI users
    ```
 
 2. When prompted to allow commands (e.g., "Add Shell(cd), Shell(make) to allowlist?"), approve them
@@ -135,8 +135,8 @@ You can have agents that use different LLMs side by side:
 
 ```
 .agents/
-├── code-reviewer.md    # run-agent: claude  (strong reasoning)
 ├── test-writer.md      # run-agent: codex   (fast generation)
+├── code-reviewer.md    # run-agent: claude  (strong reasoning)
 └── doc-writer.md       # run-agent: gemini  (large context window)
 ```
 
@@ -181,7 +181,7 @@ One-sentence purpose.
 
 | Field | Values | Description |
 |-------|--------|-------------|
-| `run-agent` | `claude`, `cursor-agent`, `codex`, `gemini` | Which CLI executes this agent |
+| `run-agent` | `codex`, `claude`, `cursor-agent`, `gemini` | Which CLI executes this agent |
 
 If `run-agent` is not specified, the skill auto-detects the caller environment or defaults to `codex`.
 
@@ -261,7 +261,7 @@ To customize: `export SUB_AGENTS_DIR=/custom/path`
 | `--prompt` | Yes* | Task description to delegate |
 | `--cwd` | Yes* | Working directory (absolute path) |
 | `--timeout` | No | Timeout ms (default: 600000) |
-| `--cli` | No | Force CLI: `claude`, `cursor-agent`, `codex`, `gemini` |
+| `--cli` | No | Force CLI: `codex`, `claude`, `cursor-agent`, `gemini` |
 
 *Required when not using --list
 
@@ -275,11 +275,14 @@ Only use agent definitions you've written yourself or from sources you trust. Re
 
 ### Timeout errors or authentication failures
 
-**If using Cursor CLI:**
-Run `cursor-agent login` to authenticate. Sessions can expire, so just run this command again if you see auth errors.
+**If using Codex:**
+Make sure the CLI is properly installed and accessible.
 
 **If using Claude Code:**
 Make sure the CLI is properly installed and accessible.
+
+**If using Cursor CLI:**
+Run `cursor-agent login` to authenticate. Sessions can expire, so just run this command again if you see auth errors.
 
 **If using Gemini CLI:**
 Run `gemini` once to authenticate via browser.
@@ -295,9 +298,9 @@ Check that:
 
 Install the required CLI:
 - Codex: `npm install -g @openai/codex`
-- Cursor: `curl https://cursor.com/install -fsS | bash`
-- Gemini: `npm install -g @google/gemini-cli`
-- Claude: `npm install -g @anthropic-ai/claude-code`
+- Claude Code: `curl -fsSL https://claude.ai/install.sh | bash`
+- Cursor CLI: `curl https://cursor.com/install -fsS | bash`
+- Gemini CLI: `npm install -g @google/gemini-cli`
 
 ### Other execution errors
 
@@ -317,7 +320,7 @@ The main agent stays lightweight too. It coordinates work without accumulating a
 
 ### Agent Skills as an Open Standard
 
-This skill uses the [Agent Skills](https://agentskills.io) format—a convention for packaging reusable AI agent capabilities as portable files. The format is supported by Codex, Claude Code, Cursor, Gemini CLI, and [30+ other tools](https://agentskills.io), so the same skill works across environments without modification.
+This skill uses the [Agent Skills](https://agentskills.io) format—a convention for packaging reusable AI agent capabilities as portable files. The format is supported by Codex, Claude Code, Cursor CLI, Gemini CLI, and [30+ other tools](https://agentskills.io), so the same skill works across environments without modification.
 
 ## How It Works
 
