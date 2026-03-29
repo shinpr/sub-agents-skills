@@ -1,49 +1,37 @@
 # Codex-Specific Notes
 
-Read this reference when executing sub-agents from Codex CLI.
+Prevents two common Codex failures: sandbox denial and timeout mismatch.
 
-## Where to Set Parameters
+## Permission
 
-Codex CLI uses **Bash tool call parameters** for permissions and timeout. These are NOT command-line arguments—they are tool invocation settings.
+This script accesses `~/.codex/sessions` and external CLI binaries.
+Use escalated sandbox permissions from the first run for this skill.
 
-```json
-{
-  "tool": "Bash",
-  "parameters": {
-    "command": "/path/to/scripts/run_subagent.py --agent <name> --prompt \"<task>\" --cwd /absolute/path --timeout 600000",
-    "timeout_ms": 600000,
-    "sandbox_permissions": "require_escalated"
-  }
-}
-```
+## Timeout
 
-## Permission: Request Escalated BEFORE First Execution
+- Script arg: `--timeout 600000`
+- Tool param: `timeout_ms: 600000`
+- Rule: both values must match
 
-Sub-agent CLIs require access to session files outside the sandbox.
+## Sub-Agent Execution
 
-**Setting:** `"sandbox_permissions": "require_escalated"` in Bash tool parameters.
+When running a sub-agent, operate as a broker: carry one run from start to terminal state.
 
-Always request escalated permissions on the first run. Sandboxed runs fail with:
-```
-Error: Fatal error: Codex cannot access session files at ~/.codex/sessions (permission denied)
-```
+### Allowed actions
 
-## Timeout: Match timeout_ms with --timeout
+1. Validate the requested agent
+2. Start `run_subagent.py`
+3. Stay attached to that run until it finishes, times out, or fails
+4. Return the sub-agent result, or the failure/timeout outcome
 
-Codex's Bash tool has its own timeout (`timeout_ms`), separate from the script's `--timeout` argument.
+### If the user asks a question mid-run
 
-**Setting:** `"timeout_ms": 600000` in Bash tool parameters (must match `--timeout` value).
-
-| --timeout | timeout_ms | Result |
-|-----------|------------|--------|
-| Not set | Not set | Script: 600000ms, Tool: ~10000ms → Tool kills script early |
-| 600000 | Not set | Same problem |
-| 600000 | 600000 | Correct: both aligned |
+Answer briefly, then return to waiting on the same run.
 
 ## Common Errors
 
 | Error | Cause | Solution |
 |-------|-------|----------|
-| `Operation not permitted (os error 1)` | Sandbox restriction | Use `sandbox_permissions:"require_escalated"` |
-| `(no output)` after few seconds | Tool timeout too short | Set `timeout_ms` to match `--timeout` |
-| `permission denied` on session files | Need elevated permissions | Request escalated permissions first |
+| `Operation not permitted (os error 1)` | Sandbox restriction | Use escalated permissions |
+| No output after a few seconds | Tool timeout too short | Align tool timeout with `--timeout` |
+| `permission denied` on session files | Sandbox restriction | Use escalated permissions |

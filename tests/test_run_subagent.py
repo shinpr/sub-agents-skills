@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Tests for run_subagent.py"""
 
+import os
 import sys
 import tempfile
 from pathlib import Path
@@ -13,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "sub-agents" / 
 
 from run_subagent import (
     StreamProcessor,
+    _build_system_prompt_args,
     build_command,
     detect_caller_cli,
     execute_agent,
@@ -64,8 +66,9 @@ class TestLoadAgentRejectsInvalidNames:
     def test_loads_simple_hyphenated_name(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             agents_dir = self._make_agents_dir(tmpdir)
-            _, context, _ = load_agent(agents_dir, "valid-agent")
+            _, context, _, file_path = load_agent(agents_dir, "valid-agent")
             assert "Valid" in context
+            assert file_path.endswith("valid-agent.md")
 
     # --- Path traversal attempts are rejected ---
 
@@ -133,10 +136,11 @@ This is a test agent.
 ## Instructions
 Do something.
 """)
-            run_agent, system_context, desc = load_agent(tmpdir, "test-agent")
+            run_agent, system_context, desc, file_path = load_agent(tmpdir, "test-agent")
             assert run_agent == "codex"
             assert "# Test Agent" in system_context
             assert "This is a test agent." in desc
+            assert file_path.endswith("test-agent.md")
 
     def test_agent_not_found(self):
         with tempfile.TemporaryDirectory() as tmpdir, pytest.raises(FileNotFoundError):
@@ -302,17 +306,97 @@ class TestExtractDescription:
         assert len(result) == 100
 
 
+class TestBuildSystemPromptArgs:
+    """Tests for CLI-specific system prompt separation."""
+
+    def test_claude_uses_append_system_prompt_flag(self):
+        """Claude should use --append-system-prompt with cwd prefix"""
+        cmd, args, env = _build_system_prompt_args(
+            "claude", "Agent definition", "User task", "/test/cwd"
+        )
+        assert cmd == "claude"
+        assert "--append-system-prompt" in args
+        # System prompt should include cwd and agent definition
+        sp_idx = args.index("--append-system-prompt")
+        system_prompt_value = args[sp_idx + 1]
+        assert "cwd: /test/cwd" in system_prompt_value
+        assert "Agent definition" in system_prompt_value
+        # User prompt should be separate
+        assert "-p" in args
+        p_idx = args.index("-p")
+        assert args[p_idx + 1] == "User task"
+        # No env override
+        assert env is None
+
+    def test_gemini_uses_agent_file_for_system_md(self):
+        """Gemini should set GEMINI_SYSTEM_MD to the agent file path"""
+        cmd, args, env = _build_system_prompt_args(
+            "gemini",
+            "Agent definition",
+            "User task",
+            "/test/cwd",
+            agent_file="/path/to/agent.md",
+        )
+        assert cmd == "gemini"
+        # User prompt should be in args
+        assert "-p" in args
+        p_idx = args.index("-p")
+        assert args[p_idx + 1] == "User task"
+        # Env should have GEMINI_SYSTEM_MD pointing to agent file
+        assert env is not None
+        assert env["GEMINI_SYSTEM_MD"] == "/path/to/agent.md"
+
+    def test_gemini_without_agent_file_concatenates(self):
+        """Gemini without agent_file should fall back to concatenation"""
+        cmd, args, env = _build_system_prompt_args(
+            "gemini",
+            "Agent definition",
+            "User task",
+            "/test/cwd",
+        )
+        assert cmd == "gemini"
+        p_idx = args.index("-p")
+        prompt_arg = args[p_idx + 1]
+        assert "[System Context]" in prompt_arg
+        assert "Agent definition" in prompt_arg
+        assert env is None
+
+    def test_codex_concatenates_prompt(self):
+        """Codex should concatenate system context and user prompt"""
+        cmd, args, env = _build_system_prompt_args(
+            "codex", "Agent definition", "User task", "/test/cwd"
+        )
+        assert cmd == "codex"
+        prompt_arg = args[-1]
+        assert "[System Context]" in prompt_arg
+        assert "Agent definition" in prompt_arg
+        assert "[User Prompt]" in prompt_arg
+        assert "User task" in prompt_arg
+        assert env is None
+
+    def test_cursor_concatenates_prompt(self):
+        """Cursor should concatenate system context and user prompt"""
+        cmd, args, env = _build_system_prompt_args(
+            "cursor-agent", "Agent definition", "User task", "/test/cwd"
+        )
+        assert cmd == "cursor-agent"
+        p_idx = args.index("-p")
+        prompt_arg = args[p_idx + 1]
+        assert "[System Context]" in prompt_arg
+        assert "Agent definition" in prompt_arg
+        assert env is None
+
+
 class TestExecuteAgent:
     def test_returns_error_when_cli_executable_not_found(self):
         """Should return error status when CLI executable is not in PATH"""
-        # Mock build_command to return a non-existent executable
         with tempfile.TemporaryDirectory() as tmpdir:
             with patch(
                 "run_subagent.build_command",
                 return_value=("nonexistent-cli-12345", ["arg1"]),
             ):
                 result = execute_agent(
-                    cli="codex",  # Valid CLI name, but build_command is mocked
+                    cli="codex",
                     system_context="test context",
                     prompt="test prompt",
                     cwd=tmpdir,
@@ -322,8 +406,8 @@ class TestExecuteAgent:
                 assert result["exit_code"] == 127
                 assert "not found" in result["error"].lower()
 
-    def test_formats_prompt_with_system_context(self):
-        """Should combine system context and user prompt"""
+    def test_codex_formats_prompt_with_system_context(self):
+        """Codex should combine system context and user prompt in single arg"""
         mock_process = MagicMock()
         mock_process.stdout.readline.return_value = ""
         mock_process.communicate.return_value = ("", "")
@@ -338,10 +422,32 @@ class TestExecuteAgent:
                     cwd=tmpdir,
                     timeout=5000,
                 )
-                # Verify the prompt was formatted correctly
                 call_args = mock_popen.call_args[0][0]
-                prompt_arg = call_args[-1]  # Last argument is the prompt
+                prompt_arg = call_args[-1]
                 assert "[System Context]" in prompt_arg
                 assert "System instructions" in prompt_arg
                 assert "[User Prompt]" in prompt_arg
                 assert "User task" in prompt_arg
+
+    def test_gemini_passes_env_with_agent_file(self):
+        """Gemini should set GEMINI_SYSTEM_MD env var to agent file path"""
+        mock_process = MagicMock()
+        mock_process.stdout.readline.return_value = ""
+        mock_process.communicate.return_value = ("", "")
+        mock_process.returncode = 0
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            agent_file = os.path.join(tmpdir, "test-agent.md")
+            with open(agent_file, "w") as f:
+                f.write("# Agent\n\nDefinition.")
+            with patch("subprocess.Popen", return_value=mock_process) as mock_popen:
+                execute_agent(
+                    cli="gemini",
+                    system_context="Agent definition",
+                    prompt="User task",
+                    cwd=tmpdir,
+                    timeout=5000,
+                    agent_file=agent_file,
+                )
+                popen_kwargs = mock_popen.call_args[1]
+                assert popen_kwargs["env"]["GEMINI_SYSTEM_MD"] == agent_file
