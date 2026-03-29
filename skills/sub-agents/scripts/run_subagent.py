@@ -74,10 +74,10 @@ def validate_agent_name(agent_name: str) -> str:
     return agent_name
 
 
-def load_agent(agents_dir: str, agent_name: str) -> tuple[str | None, str, str]:
+def load_agent(agents_dir: str, agent_name: str) -> tuple[str | None, str, str, str]:
     """
     Load agent definition file and extract run-agent setting.
-    Returns (run_agent_cli, system_context, description)
+    Returns (run_agent_cli, system_context, description, file_path)
     """
     validate_agent_name(agent_name)
     agents_path = Path(agents_dir)
@@ -96,7 +96,7 @@ def load_agent(agents_dir: str, agent_name: str) -> tuple[str | None, str, str]:
             run_agent = frontmatter.get("run-agent")
             description = extract_description(body)
 
-            return run_agent, body.strip(), description
+            return run_agent, body.strip(), description, str(resolved)
 
     raise FileNotFoundError(f"Agent definition not found: {agent_name}")
 
@@ -321,8 +321,43 @@ def build_command(cli: str, prompt: str) -> tuple[str, list]:
     raise ValueError(f"Unknown CLI: {cli}")
 
 
+def _build_system_prompt_args(
+    cli: str, system_context: str, prompt: str, cwd: str, agent_file: str | None = None
+) -> tuple[str, list, dict | None]:
+    """
+    Build CLI-specific command, args, and env overrides
+    for system prompt separation.
+
+    Claude uses --append-system-prompt flag.
+    Gemini uses GEMINI_SYSTEM_MD environment variable pointing to the agent file.
+    Other CLIs concatenate system context into the user prompt.
+
+    Returns: (command, args, env_override_or_None)
+    """
+    if cli == "claude":
+        system_prompt = f"cwd: {cwd}\n\n{system_context}"
+        command, base_args = build_command(cli, prompt)
+        args = ["--append-system-prompt", system_prompt] + base_args
+        return command, args, None
+
+    if cli == "gemini" and agent_file:
+        command, args = build_command(cli, prompt)
+        env_override = {"GEMINI_SYSTEM_MD": agent_file}
+        return command, args, env_override
+
+    # Codex, cursor-agent, or gemini without agent_file: concatenate as before
+    formatted_prompt = f"[System Context]\n{system_context}\n\n[User Prompt]\n{prompt}"
+    command, args = build_command(cli, formatted_prompt)
+    return command, args, None
+
+
 def execute_agent(
-    cli: str, system_context: str, prompt: str, cwd: str, timeout: int = 600000
+    cli: str,
+    system_context: str,
+    prompt: str,
+    cwd: str,
+    timeout: int = 600000,
+    agent_file: str | None = None,
 ) -> dict:
     """
     Execute agent CLI and return result.
@@ -334,11 +369,15 @@ def execute_agent(
         "cli": str
     }
     """
-    # Format prompt with system context
-    formatted_prompt = f"[System Context]\n{system_context}\n\n[User Prompt]\n{prompt}"
-
-    command, args = build_command(cli, formatted_prompt)
+    command, args, env_override = _build_system_prompt_args(
+        cli, system_context, prompt, cwd, agent_file
+    )
     timeout_sec = timeout / 1000
+
+    # Build subprocess env: inherit parent env, overlay CLI-specific vars
+    proc_env = None
+    if env_override:
+        proc_env = {**os.environ, **env_override}
 
     try:
         process = subprocess.Popen(
@@ -348,6 +387,7 @@ def execute_agent(
             stderr=subprocess.PIPE,
             text=True,
             bufsize=1,
+            env=proc_env,
         )
 
         processor = StreamProcessor()
@@ -381,7 +421,7 @@ def execute_agent(
             exit_code = process.returncode or 0
 
             # Determine status
-            if exit_code == 0 or exit_code in (143, -15) and result:
+            if (exit_code == 0 or exit_code in (143, -15)) and result:
                 status = "success"
             elif result:
                 status = "partial"
@@ -507,7 +547,7 @@ def main():
 
     # Load agent definition
     try:
-        run_agent_cli, system_context, _ = load_agent(agents_dir, args.agent)
+        run_agent_cli, system_context, _, agent_file = load_agent(agents_dir, args.agent)
     except FileNotFoundError as e:
         print(json.dumps({"result": "", "exit_code": 1, "status": "error", "error": str(e)}))
         sys.exit(1)
@@ -522,6 +562,7 @@ def main():
         prompt=args.prompt,
         cwd=args.cwd,
         timeout=args.timeout,
+        agent_file=agent_file,
     )
 
     print(json.dumps(result, ensure_ascii=False))
