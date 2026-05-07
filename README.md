@@ -175,8 +175,17 @@ One-sentence purpose.
 | Field | Values | Description |
 |-------|--------|-------------|
 | `run-agent` | `codex`, `claude`, `cursor-agent`, `gemini` | Which CLI executes this agent |
+| `permission` | `read-only`, `safe-edit` (default), `yolo` | Approval/sandbox level the sub-agent runs with |
 
 If `run-agent` is not specified, the skill auto-detects the caller environment or defaults to `codex`.
+
+**Permission levels:**
+
+- `read-only` — investigation/review only, no edits or shell writes (codex `-s read-only` / claude `--permission-mode plan` / gemini `--approval-mode plan` / cursor `--mode plan`)
+- `safe-edit` — auto-approve edits inside the workspace, suppress prompts (default; codex `-s workspace-write` + `approval_policy=never` / claude `--permission-mode acceptEdits` / gemini `--approval-mode auto_edit` / cursor `--trust`)
+- `yolo` — bypass all approvals and sandboxing. Use with care.
+
+Sub-agents have no stdin, so any approval prompt would deadlock the run. The default `safe-edit` keeps writes confined to the workspace while suppressing prompts.
 
 ### Keep Agents Self-Contained
 

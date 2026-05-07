@@ -137,6 +137,7 @@ Place `.md` files in `.agents/` directory:
 ```markdown
 ---
 run-agent: claude
+permission: safe-edit
 ---
 
 # Agent Name
@@ -151,6 +152,19 @@ How results should be structured.
 ```
 
 **Critical**: The `run-agent` frontmatter determines which CLI executes the agent.
+
+**Frontmatter fields:**
+
+| Field | Values | Description |
+|-------|--------|-------------|
+| `run-agent` | `codex`, `claude`, `cursor-agent`, `gemini` | Which CLI executes this agent |
+| `permission` | `read-only`, `safe-edit` (default), `yolo` | Approval/sandbox level the sub-agent runs with |
+
+`permission` levels (mapped per-CLI by the skill):
+
+- `read-only` — investigation only, no edits/writes
+- `safe-edit` — auto-approve edits in workspace, suppress prompts (default)
+- `yolo` — bypass all approvals and sandboxing
 
 ## CLI Selection Priority
 
