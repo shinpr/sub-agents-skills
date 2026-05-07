@@ -79,7 +79,7 @@ class TestExecuteAgent:
                 assert result["exit_code"] == 127
                 assert "not found" in result["error"].lower()
 
-    def test_codex_uses_model_instructions_file_with_agent_file(self):
+    def test_codex_concatenates_prompt_with_agent_file(self):
         mock_process = MagicMock()
         mock_process.stdout.readline.return_value = ""
         mock_process.communicate.return_value = ("", "")
@@ -101,8 +101,12 @@ class TestExecuteAgent:
                     timeout_ms=5000,
                 )
                 call_args = mock_popen.call_args[0][0]
-                assert f'model_instructions_file="{agent_file}"' in call_args
-                assert call_args[-1] == "User task"
+                assert not any("model_instructions_file" in arg for arg in call_args)
+                prompt_arg = call_args[-1]
+                assert "[System Context]" in prompt_arg
+                assert "Agent definition" in prompt_arg
+                assert "[User Prompt]" in prompt_arg
+                assert "User task" in prompt_arg
 
     def test_aborts_when_stdout_exceeds_memory_cap(self):
         """A flooding sub-agent must be killed before exhausting broker memory.

@@ -80,19 +80,6 @@ def permission_flags(cli: str, permission: str) -> list:
         raise ValueError(f"No permission mapping for cli={cli!r}, permission={permission!r}") from e
 
 
-def toml_escape_path(path: str) -> str:
-    """Escape a filesystem path for safe interpolation into a TOML basic string.
-
-    Raises ValueError on characters that cannot appear in a TOML basic string
-    (newline / carriage return) — these would let an attacker who controls a
-    parent directory name break out of the quoted value and inject extra
-    config when passed to ``codex -c key="<value>"``.
-    """
-    if "\n" in path or "\r" in path:
-        raise ValueError(f"Path contains newline characters, refusing to use: {path!r}")
-    return path.replace("\\", "\\\\").replace('"', '\\"')
-
-
 def _concatenated_args(
     inv: AgentInvocation, perm_flags: list, env: dict | None
 ) -> tuple[str, list, dict | None]:
@@ -122,11 +109,6 @@ def _build_gemini_args(inv: AgentInvocation) -> tuple[str, list, dict | None]:
 
 def _build_codex_args(inv: AgentInvocation) -> tuple[str, list, dict | None]:
     perm = permission_flags(inv.cli, inv.permission)
-    if inv.agent_file:
-        command, base_args = build_command(inv.cli, inv.prompt)
-        escaped = toml_escape_path(inv.agent_file)
-        instructions_arg = ["-c", f'model_instructions_file="{escaped}"']
-        return command, perm + instructions_arg + base_args, None
     return _concatenated_args(inv, perm, env=None)
 
 
