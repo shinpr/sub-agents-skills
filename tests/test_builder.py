@@ -11,7 +11,6 @@ from _builder import (
     build_command,
     build_invocation_args,
     permission_flags,
-    toml_escape_path,
 )
 
 
@@ -101,12 +100,15 @@ class TestBuildInvocationArgs:
         assert "Agent definition" in prompt_arg
         assert env is None
 
-    def test_codex_uses_model_instructions_file_when_agent_file_given(self):
+    def test_codex_concatenates_prompt_even_when_agent_file_given(self):
         cmd, args, env = build_invocation_args(_inv("codex", agent_file="/path/to/agent.md"))
         assert cmd == "codex"
-        assert 'model_instructions_file="/path/to/agent.md"' in args
-        assert args[-1] == "User task"
-        assert "[System Context]" not in args[-1]
+        assert not any("model_instructions_file" in arg for arg in args)
+        prompt_arg = args[-1]
+        assert "[System Context]" in prompt_arg
+        assert "Agent definition" in prompt_arg
+        assert "[User Prompt]" in prompt_arg
+        assert "User task" in prompt_arg
         assert env is None
 
     def test_codex_falls_back_to_concatenation_without_agent_file(self):
@@ -242,35 +244,3 @@ class TestPermissionAppliedToCommand:
             )
         )
         assert "--trust" in args
-
-
-class TestTomlEscapePath:
-    def test_plain_path(self):
-        assert toml_escape_path("/tmp/agents/foo.md") == "/tmp/agents/foo.md"
-
-    def test_escapes_double_quote(self):
-        assert toml_escape_path('/tmp/has "quote".md') == '/tmp/has \\"quote\\".md'
-
-    def test_escapes_backslash(self):
-        assert toml_escape_path("C:\\Users\\foo") == "C:\\\\Users\\\\foo"
-
-    def test_rejects_newline(self):
-        with pytest.raises(ValueError, match="newline"):
-            toml_escape_path("/tmp/x\ninjected = true\n#")
-
-    def test_rejects_carriage_return(self):
-        with pytest.raises(ValueError, match="newline"):
-            toml_escape_path("/tmp/x\rinjected")
-
-    def test_codex_args_escape_quote_in_path(self):
-        """End-to-end: codex builder passes the escaped path through."""
-        cmd, args, _ = build_invocation_args(
-            AgentInvocation(
-                cli="codex",
-                prompt="t",
-                cwd="/tmp",
-                system_context="ctx",
-                agent_file='/tmp/has "x".md',
-            )
-        )
-        assert 'model_instructions_file="/tmp/has \\"x\\".md"' in args
