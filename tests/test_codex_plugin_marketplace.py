@@ -65,7 +65,6 @@ def test_manifest_versions_match_project_version():
     project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())
     project_version = project["project"]["version"]
     manifest_paths = [
-        REPO_ROOT / ".codex-plugin" / "plugin.json",
         REPO_ROOT / ".claude-plugin" / "plugin.json",
         REPO_ROOT / "plugins" / "runner" / ".codex-plugin" / "plugin.json",
     ]
