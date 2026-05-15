@@ -1,5 +1,8 @@
 # Sub-Agents Skills
 
+[![Claude Code](https://img.shields.io/badge/Claude%20Code-Plugin-purple)](https://claude.ai/code)
+[![Codex CLI](https://img.shields.io/badge/Codex%20CLI-Plugin-10a37f)](https://developers.openai.com/codex/cli)
+[![Agent Skills](https://img.shields.io/badge/Agent%20Skills-Spec%20Compliant-blue)](https://agentskills.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 **Orchestrate any LLM as a sub-agent from any AI coding tool.**
@@ -45,20 +48,47 @@ You only need to install the backends you plan to use.
 
 ### 1. Install the Skill
 
-**Via curl:**
-```bash
-# For Codex
-curl -fsSL https://raw.githubusercontent.com/shinpr/sub-agents-skills/main/install.sh | bash -s -- --target ~/.codex/skills
+**Claude Code (plugin):**
 
-# For Claude Code
-curl -fsSL https://raw.githubusercontent.com/shinpr/sub-agents-skills/main/install.sh | bash -s -- --target ~/.claude/skills
+```text
+/plugin marketplace add shinpr/sub-agents-skills
+/plugin install runner@sub-agents-skills
+/reload-plugins
 ```
 
-**Manually:**
+**Codex (plugin):**
+
+```sh
+codex plugin marketplace add shinpr/sub-agents-skills
+```
+
+Then start or return to Codex, open the plugin picker, and install `Runner`:
+
+```text
+/plugins
+```
+
+**Other clients (Cursor CLI, Gemini CLI, VS Code, etc.):**
+
+Use the install script to copy the skill into the client's skill path:
+
+```bash
+# Cursor
+curl -fsSL https://raw.githubusercontent.com/shinpr/sub-agents-skills/main/install.sh | bash -s -- --target ~/.cursor/skills
+
+# Gemini
+curl -fsSL https://raw.githubusercontent.com/shinpr/sub-agents-skills/main/install.sh | bash -s -- --target ~/.gemini/skills
+
+# VS Code / Copilot (project-scoped)
+curl -fsSL https://raw.githubusercontent.com/shinpr/sub-agents-skills/main/install.sh | bash -s -- --target .github/skills
+```
+
+Or clone manually:
+
 ```bash
 git clone https://github.com/shinpr/sub-agents-skills.git
 cd sub-agents-skills
-./install.sh --target ~/.codex/skills
+./install.sh --target <client-skill-path>
 ```
 
 ### 2. Create Your First Agent

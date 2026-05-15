@@ -1,0 +1,20 @@
+{
+  "name": "sub-agents-skills",
+  "interface": {
+    "displayName": "Sub-Agents Skills"
+  },
+  "plugins": [
+    {
+      "name": "runner",
+      "source": {
+        "source": "local",
+        "path": "./"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}

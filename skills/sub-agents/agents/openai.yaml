@@ -1,0 +1,7 @@
+interface:
+  display_name: "Sub-Agents"
+  short_description: "Use for running named sub-agents and delegating tasks to agent definitions"
+  default_prompt: "Use $sub-agents to run an agent definition as a sub-agent. Read SKILL.md, then invoke scripts/run_subagent.py with --agent and --prompt resolved from the user request. Check references/codex.md before the first Codex run."
+
+policy:
+  allow_implicit_invocation: true
