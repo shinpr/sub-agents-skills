@@ -24,7 +24,13 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pytest
+          pip install pytest ruff pre-commit tomli
+
+      - name: Run lint
+        run: ruff check .
+
+      - name: Check plugin sync
+        run: python scripts/sync_plugin.py --check
 
       - name: Run tests
         run: pytest tests/ -v
