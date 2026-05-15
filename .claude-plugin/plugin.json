@@ -1,0 +1,21 @@
+{
+  "name": "runner",
+  "description": "Sub-agent runner — runs agent definitions on Codex, Claude Code, Cursor CLI, or Gemini CLI from any host AI tool.",
+  "version": "0.4.0",
+  "author": {
+    "name": "Shinsuke Kagawa",
+    "url": "https://github.com/shinpr"
+  },
+  "homepage": "https://github.com/shinpr/sub-agents-skills",
+  "repository": "https://github.com/shinpr/sub-agents-skills.git",
+  "license": "MIT",
+  "keywords": [
+    "sub-agents",
+    "agent-skills",
+    "orchestration",
+    "codex",
+    "claude-code",
+    "cursor",
+    "gemini"
+  ]
+}

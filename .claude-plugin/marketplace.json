@@ -1,0 +1,27 @@
+{
+  "name": "sub-agents-skills",
+  "owner": {
+    "name": "Shinsuke Kagawa",
+    "url": "https://github.com/shinpr"
+  },
+  "description": "Sub-agent runner skill for Claude Code, Codex, Cursor CLI, and Gemini CLI.",
+  "plugins": [
+    {
+      "name": "runner",
+      "source": "./",
+      "description": "Runner that executes agent definitions as sub-agents on Codex, Claude Code, Cursor CLI, or Gemini CLI.",
+      "version": "0.4.0",
+      "author": {
+        "name": "Shinsuke Kagawa",
+        "url": "https://github.com/shinpr"
+      },
+      "category": "Developer Tools",
+      "tags": [
+        "sub-agents",
+        "agent-skills",
+        "orchestration",
+        "multi-llm"
+      ]
+    }
+  ]
+}
