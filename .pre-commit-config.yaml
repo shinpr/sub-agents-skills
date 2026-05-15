@@ -1,0 +1,20 @@
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: python -m ruff check .
+        language: system
+        pass_filenames: false
+
+      - id: plugin-sync-check
+        name: plugin sync check
+        entry: python scripts/sync_plugin.py --check
+        language: system
+        pass_filenames: false
+
+      - id: pytest
+        name: pytest
+        entry: python -m pytest
+        language: system
+        pass_filenames: false

@@ -54,11 +54,13 @@ You only need to install the backends you plan to use.
 codex plugin marketplace add shinpr/sub-agents-skills
 ```
 
-Then start or return to Codex, open the plugin picker, and install `Runner`:
+Then open the plugin picker, install `Runner`, and restart Codex:
 
 ```text
 /plugins
 ```
+
+After restart, invoke the skill as `$runner:sub-agents`.
 
 **Claude Code (plugin):**
 

@@ -8,7 +8,7 @@
       "name": "runner",
       "source": {
         "source": "local",
-        "path": "./"
+        "path": "./plugins/runner"
       },
       "policy": {
         "installation": "AVAILABLE",
