@@ -1,7 +1,7 @@
 # Sub-Agents Skills
 
-[![Claude Code](https://img.shields.io/badge/Claude%20Code-Plugin-purple)](https://claude.ai/code)
 [![Codex CLI](https://img.shields.io/badge/Codex%20CLI-Plugin-10a37f)](https://developers.openai.com/codex/cli)
+[![Claude Code](https://img.shields.io/badge/Claude%20Code-Plugin-purple)](https://claude.ai/code)
 [![Agent Skills](https://img.shields.io/badge/Agent%20Skills-Spec%20Compliant-blue)](https://agentskills.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -48,14 +48,6 @@ You only need to install the backends you plan to use.
 
 ### 1. Install the Skill
 
-**Claude Code (plugin):**
-
-```text
-/plugin marketplace add shinpr/sub-agents-skills
-/plugin install runner@sub-agents-skills
-/reload-plugins
-```
-
 **Codex (plugin):**
 
 ```sh
@@ -66,6 +58,14 @@ Then start or return to Codex, open the plugin picker, and install `Runner`:
 
 ```text
 /plugins
+```
+
+**Claude Code (plugin):**
+
+```text
+/plugin marketplace add shinpr/sub-agents-skills
+/plugin install runner@sub-agents-skills
+/reload-plugins
 ```
 
 **Other clients (Cursor CLI, Gemini CLI, VS Code, etc.):**
