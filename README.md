@@ -319,7 +319,7 @@ Make sure the CLI is properly installed and accessible.
 Run `cursor-agent login` to authenticate. Sessions can expire, so just run this command again if you see auth errors.
 
 **If using Gemini CLI:**
-Run `gemini` once to authenticate via browser.
+Set `GEMINI_API_KEY` in the environment — without it the `gemini` backend won't run (Google is retiring the free OAuth tier on June 18, 2026).
 
 ### Agent not found
 
