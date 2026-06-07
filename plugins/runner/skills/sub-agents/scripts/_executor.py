@@ -42,15 +42,22 @@ def build_final_response(
     result: dict | None,
     stdout_lines: list,
     stderr: str,
+    terminated_by_us: bool = False,
 ) -> dict:
     """Assemble the response dict from process exit state and parsed result.
 
     ``returncode is None`` means the process has not actually finished — that
     is treated as a failure (the original ``or 0`` masked this).
+
+    ``terminated_by_us`` records that we called ``terminate()`` after parsing a
+    complete result. The exit code is then irrelevant: POSIX reports SIGTERM as
+    143 / -15, but Windows' TerminateProcess yields 1. Trusting the intent
+    rather than the platform-specific exit code keeps success detection
+    consistent across OSes.
     """
     exit_code = returncode if returncode is not None else 1
 
-    if exit_code in _SUCCESS_EXIT_CODES and result:
+    if result and (terminated_by_us or exit_code in _SUCCESS_EXIT_CODES):
         status = "success"
     elif result:
         status = "partial"
@@ -197,7 +204,12 @@ def _drive_process(process: subprocess.Popen, cli: str, timeout_ms: int) -> dict
             return _timeout_payload(cli, processor, timeout_ms)
 
         return build_final_response(
-            cli, process.returncode, processor.get_result(), stdout_lines, stderr
+            cli,
+            process.returncode,
+            processor.get_result(),
+            stdout_lines,
+            stderr,
+            terminated_by_us=saw_terminal,
         )
     except (OSError, ValueError) as e:
         # OSError covers I/O failures on the pipe; ValueError covers reading
@@ -228,6 +240,11 @@ def execute_agent(inv: AgentInvocation, timeout_ms: int = 600000) -> dict:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            # Pin UTF-8 explicitly: text mode otherwise decodes with the locale
+            # codepage (cp932/cp1252 on Windows), garbling the UTF-8 NDJSON the
+            # CLIs emit. errors="replace" degrades malformed bytes gracefully.
+            encoding="utf-8",
+            errors="replace",
             bufsize=1,
             env=proc_env,
         )

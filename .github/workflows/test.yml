@@ -8,10 +8,15 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ['3.9', '3.10', '3.11', '3.12']
+        os: [ubuntu-latest, windows-latest]
+        # Boundaries of the supported range (requires-python = ">=3.9"); the
+        # floor catches accidental newer-syntax usage, the ceiling catches
+        # deprecations. Intermediate minors rarely surface unique issues.
+        python-version: ['3.9', '3.12']
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -34,3 +39,16 @@ jobs:
 
       - name: Run tests
         run: pytest tests/ -v
+
+  # Stable aggregate check. The `main` ruleset requires a status named `ci`,
+  # so this job keeps that name regardless of the test matrix dimensions
+  # (OS / Python version), preventing required-check drift when the matrix
+  # changes.
+  ci:
+    needs: [test]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify the test matrix succeeded
+        if: needs.test.result != 'success'
+        run: exit 1
