@@ -42,6 +42,21 @@ class TestBuildFinalResponse:
         assert r["status"] == "partial"
         assert r["exit_code"] == 2
 
+    def test_terminated_by_us_with_result_is_success_regardless_of_exit_code(self):
+        # Windows: terminate() maps to TerminateProcess and yields exit code 1,
+        # unlike POSIX SIGTERM (143 / -15). When we asked the CLI to stop after a
+        # complete result, the exit code is irrelevant — it must report success.
+        r = build_final_response("claude", 1, {"result": "ok"}, [], "", terminated_by_us=True)
+        assert r["status"] == "success"
+        assert r["exit_code"] == 1
+
+    def test_nonzero_with_result_not_terminated_is_partial(self):
+        # Same exit code 1, but we did NOT initiate termination — a genuine
+        # abnormal exit with partial output stays "partial", not "success".
+        r = build_final_response("claude", 1, {"result": "ok"}, [], "", terminated_by_us=False)
+        assert r["status"] == "partial"
+        assert r["exit_code"] == 1
+
     def test_returncode_none_without_result_is_error(self):
         # No exit and no parsed payload — must not slip through as success.
         r = build_final_response("codex", None, None, [], "")
@@ -170,6 +185,53 @@ class TestExecuteAgent:
         assert elapsed < 2.0
         assert result["exit_code"] == 124
         assert "Timeout" in result["error"]
+
+    def test_popen_uses_explicit_utf8_encoding(self):
+        """Subprocess output must be decoded as UTF-8 on every platform.
+
+        Without an explicit encoding, text mode decodes using the locale
+        codepage (e.g. cp932 on Japanese Windows), garbling the UTF-8 NDJSON
+        the CLIs emit. Pin encoding and use a lenient error policy so malformed
+        bytes degrade gracefully instead of raising.
+        """
+        mock_process = MagicMock()
+        mock_process.stdout.readline.return_value = ""
+        mock_process.communicate.return_value = ("", "")
+        mock_process.returncode = 0
+
+        with patch("subprocess.Popen", return_value=mock_process) as mock_popen:
+            execute_agent(
+                AgentInvocation(cli="codex", prompt="x", cwd="/tmp"),
+                timeout_ms=5000,
+            )
+        popen_kwargs = mock_popen.call_args[1]
+        assert popen_kwargs["encoding"] == "utf-8"
+        assert popen_kwargs["errors"] == "replace"
+
+    def test_windows_terminate_exit_code_still_reports_success(self):
+        """End-to-end Windows simulation: a complete result then exit code 1.
+
+        On Windows the broker calls terminate() after parsing the terminal
+        event, and TerminateProcess leaves returncode 1. With a full result in
+        hand this must surface as success, matching POSIX behaviour.
+        """
+        mock_process = MagicMock()
+        mock_process.stdout.readline.side_effect = [
+            '{"type": "thread.started"}\n',
+            '{"type": "item.completed", "item": {"type": "agent_message", "text": "DONE"}}\n',
+            '{"type": "turn.completed"}\n',
+            "",
+        ]
+        mock_process.communicate.return_value = ("", "")
+        mock_process.returncode = 1  # Windows TerminateProcess exit code
+
+        with patch("subprocess.Popen", return_value=mock_process):
+            result = execute_agent(
+                AgentInvocation(cli="codex", prompt="x", cwd="/tmp"),
+                timeout_ms=5000,
+            )
+        assert result["status"] == "success"
+        assert result["result"] == "DONE"
 
     def test_gemini_passes_env_with_agent_file(self):
         mock_process = MagicMock()
