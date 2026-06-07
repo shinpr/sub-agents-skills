@@ -190,7 +190,10 @@ class TestGetAgentsDir:
 
     def test_cwd_fallback(self):
         result = get_agents_dir(None, "/some/cwd")
-        assert result == "/some/cwd/.agents"
+        # get_agents_dir builds the path with pathlib, so the separator is
+        # platform-native ("/" on POSIX, "\\" on Windows). Compare against the
+        # same native construction rather than a hardcoded forward-slash path.
+        assert result == str(Path("/some/cwd") / ".agents")
 
 
 class TestValidatePermission:
