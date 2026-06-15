@@ -25,6 +25,21 @@ class TestStreamProcessor:
         result = processor.get_result()
         assert result["result"] == "part1part2"
 
+    def test_gemini_stream_with_banner_prefix(self):
+        # Gemini CLI can prepend a non-JSON banner to the first event line, e.g.
+        # "MCP issues detected. Run /mcp list for status." glued onto `init`.
+        # The processor must recover the JSON so is_gemini is set and assistant
+        # text is captured (otherwise the result is silently empty).
+        processor = StreamProcessor()
+        assert not processor.process_line(
+            'MCP issues detected. Run /mcp list for status.{"type": "init"}'
+        )
+        assert not processor.process_line(
+            '{"type": "message", "role": "assistant", "content": "hi"}'
+        )
+        assert processor.process_line('{"type": "result", "status": "success"}')
+        assert processor.get_result()["result"] == "hi"
+
     def test_codex_stream(self):
         processor = StreamProcessor()
         assert not processor.process_line('{"type": "thread.started"}')

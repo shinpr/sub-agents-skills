@@ -56,12 +56,13 @@ class TestBuildCommand:
         cmd, args = build_command("gemini", "test prompt")
         assert cmd == "gemini"
         assert args == [
-            "--skip-trust",
             "--output-format",
             "stream-json",
             "-p",
             "test prompt",
         ]
+        # Gemini CLI >=0.35 removed --skip-trust; it must not be passed.
+        assert "--skip-trust" not in args
 
     def test_unknown_cli_raises_error(self):
         with pytest.raises(ValueError, match="Unknown CLI"):
@@ -165,8 +166,7 @@ class TestPermissionFlags:
         assert permission_flags("claude", "yolo") == ["--dangerously-skip-permissions"]
 
     def test_gemini_flags(self):
-        # --skip-trust lives in build_command (headless prerequisite), not in
-        # the permission mapping.
+        # --approval-mode is the trust/approval signal in headless mode.
         assert permission_flags("gemini", "read-only") == ["--approval-mode", "plan"]
         assert permission_flags("gemini", "safe-edit") == ["--approval-mode", "auto_edit"]
         assert permission_flags("gemini", "yolo") == ["-y"]
