@@ -21,11 +21,11 @@ graph LR
 
 ## Why?
 
-Most major AI coding agents now have built-in sub-agents — but only for their own model. Claude Code delegates to Claude. Codex delegates to GPT. None of them let you call a competitor's model.
+Most major AI coding agents now have built-in sub-agents — but only for their own model. Claude Code delegates to Claude. Codex delegates to GPT. Most keep that delegation inside their own ecosystem, with no portable way to route a task to another provider's model.
 
 This skill removes that restriction:
 
-- **Cross-LLM orchestration** — Use Codex for fast refactors, Claude Code for long-chain reasoning, and Gemini CLI for large-context analysis, all from the same parent session.
+- **Cross-LLM orchestration** — Use whichever model fits each task — for example, Codex for a quick edit, Claude Code for a deeper pass, or Gemini CLI when a larger context window helps — all from the same parent session.
 - **No vendor lock-in** — Your agent definitions are plain markdown files that work with Codex, Claude Code, Cursor CLI, Gemini CLI, VS Code, and [30+ other tools](https://agentskills.io) that support the Agent Skills format, so switching IDEs or LLM providers doesn't mean rewriting your workflow.
 - **Bring Your Own Model** — Choose which model handles each task and pay each provider directly at their API rates.
 - **Team portability** — Share agent definitions across your team regardless of IDE or preferred LLM.
@@ -39,8 +39,21 @@ Each agent definition specifies which CLI runs it via the `run-agent` frontmatte
 | **Claude Code** (Anthropic) | `claude` | `curl -fsSL https://claude.ai/install.sh \| bash` |
 | **Cursor** | `cursor-agent` | `curl https://cursor.com/install -fsS \| bash` |
 | **Gemini** (Google) | `gemini` | `npm install -g @google/gemini-cli` |
+| **GLM** (Z.ai) | `claude` (GLM endpoint) | Uses the Claude Code binary (see below) |
 
 You only need to install the backends you plan to use.
+
+### GLM (Z.ai)
+
+The `glm` backend runs the **Claude Code binary** against GLM's Anthropic-compatible endpoint, so it reuses Claude Code's streaming output and needs no separate CLI — install `claude` as above. Unlike the `claude` backend, which appends the agent definition to Claude Code's default system prompt, the `glm` backend replaces the system prompt entirely, so the model runs on its own characteristics.
+
+Set your Z.ai token in `CLI_API_KEY` before running a `glm` agent:
+
+```bash
+export CLI_API_KEY=<your-z.ai-token>
+```
+
+The skill forwards it to the Claude binary as the Z.ai credential (via env, never argv) and points the binary at `https://api.z.ai/api/anthropic`. Requests are billed by Z.ai, not Anthropic. When `CLI_API_KEY` is unset, a `glm` run returns a configuration error asking you to set it.
 
 ## Quick Start
 
@@ -206,7 +219,7 @@ One-sentence purpose.
 
 | Field | Values | Description |
 |-------|--------|-------------|
-| `run-agent` | `codex`, `claude`, `cursor-agent`, `gemini` | Which CLI executes this agent |
+| `run-agent` | `codex`, `claude`, `cursor-agent`, `gemini`, `glm` | Which CLI executes this agent |
 | `permission` | `read-only`, `safe-edit` (default), `yolo` | Approval/sandbox level the sub-agent runs with |
 
 If `run-agent` is not specified, the skill auto-detects the caller environment or defaults to `codex`.
@@ -286,6 +299,8 @@ To customize: `export SUB_AGENTS_DIR=/custom/path`
 3. Auto-detect caller environment
 4. Default: `codex`
 
+`--cli` always overrides the agent definition's `run-agent`.
+
 ### Script Parameters
 
 | Parameter | Required | Description |
@@ -295,7 +310,7 @@ To customize: `export SUB_AGENTS_DIR=/custom/path`
 | `--prompt` | Yes* | Task description to delegate |
 | `--cwd` | Yes* | Working directory (absolute path) |
 | `--timeout` | No | Timeout ms (default: 600000) |
-| `--cli` | No | Force CLI: `codex`, `claude`, `cursor-agent`, `gemini` |
+| `--cli` | No | Force CLI: `codex`, `claude`, `cursor-agent`, `gemini`, `glm` |
 
 *Required when not using --list
 
@@ -309,17 +324,17 @@ Only use agent definitions you've written yourself or from sources you trust. Re
 
 ### Timeout errors or authentication failures
 
-**If using Codex:**
-Make sure the CLI is properly installed and accessible.
+**Codex / Claude Code:**
+Make sure the CLI is installed and accessible in your `PATH`.
 
-**If using Claude Code:**
-Make sure the CLI is properly installed and accessible.
-
-**If using Cursor CLI:**
+**Cursor CLI:**
 Run `cursor-agent login` to authenticate. Sessions can expire, so just run this command again if you see auth errors.
 
-**If using Gemini CLI:**
+**Gemini CLI:**
 Set `GEMINI_API_KEY` in the environment — without it the `gemini` backend won't run (Google is retiring the free OAuth tier on June 18, 2026).
+
+**GLM:**
+Set `CLI_API_KEY` to your Z.ai token — an unset key returns a configuration error (see [GLM (Z.ai)](#glm-zai)).
 
 ### Agent not found
 

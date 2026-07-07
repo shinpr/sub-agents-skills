@@ -30,7 +30,10 @@ def build_command(cli: str, prompt: str) -> tuple[str, list]:
     if cli == "codex":
         return "codex", ["exec", "--json", "--skip-git-repo-check", prompt]
 
-    if cli == "claude":
+    if cli in ("claude", "glm"):
+        # glm runs the *claude* binary pointed at a GLM (Z.ai) Anthropic-compatible
+        # endpoint via env (see _build_glm_args), so it shares claude's argv shape
+        # and stream-json output — no separate parser needed.
         return "claude", ["--output-format", "stream-json", "--verbose", "-p", prompt]
 
     if cli == "gemini":
@@ -70,6 +73,9 @@ _PERMISSION_MAPPING = {
         "yolo": ["-f", "--trust"],
     },
 }
+
+# glm drives the claude binary, so its approval flags are identical to claude's.
+_PERMISSION_MAPPING["glm"] = _PERMISSION_MAPPING["claude"]
 
 
 def permission_flags(cli: str, permission: str) -> list:
@@ -112,6 +118,53 @@ def _build_codex_args(inv: AgentInvocation) -> tuple[str, list, dict | None]:
     return _concatenated_args(inv, perm, env=None)
 
 
+# GLM's Anthropic-compatible endpoint (Z.ai). Constant, not user-facing.
+_GLM_BASE_URL = "https://api.z.ai/api/anthropic"
+
+
+def _build_glm_args(inv: AgentInvocation) -> tuple[str, list, dict | None]:
+    """Drive the claude binary against a GLM (Z.ai) endpoint.
+
+    Two deliberate differences from _build_claude_args:
+
+    - ``--system-prompt`` (full replace), not ``--append-system-prompt``: GLM
+      should run on the agent definition alone, not layered on top of Claude
+      Code's harness system prompt (which is tuned for Claude, not GLM).
+    - Env injection routes the claude binary to Z.ai. The secret is delivered
+      via env (never argv, so it stays out of ``ps`` output). An inherited
+      ``ANTHROPIC_API_KEY`` is removed from the child env (mapped to ``None``):
+      if both ``ANTHROPIC_API_KEY`` (x-api-key) and our ``ANTHROPIC_AUTH_TOKEN``
+      (Bearer) reach the claude binary, auth conflicts and the Anthropic key can
+      be sent to Z.ai, producing a 401 — the opaque failure this backend exists
+      to avoid.
+
+    Raises ValueError (surfaced to the orchestrating LLM as a config error) when
+    the Z.ai token is absent or blank — proceeding would only produce an opaque
+    401 from Z.ai buried in the stream, which the caller cannot act on. The
+    message is phrased in positive-imperative form so the orchestrating LLM has
+    a single clear next action (BP-001).
+    """
+    api_key = os.environ.get("CLI_API_KEY")
+    if not api_key or not api_key.strip():
+        raise ValueError(
+            "GLM backend needs a Z.ai API token in the CLI_API_KEY environment "
+            "variable, which is currently unset. Ask the user to set CLI_API_KEY "
+            "to their Z.ai token and re-run, then wait for them. The same call "
+            "keeps failing until CLI_API_KEY is set, so treat this run as finished."
+        )
+    perm = permission_flags(inv.cli, inv.permission)
+    system_prompt = f"cwd: {inv.cwd}\n\n{inv.system_context}"
+    command, base_args = build_command(inv.cli, inv.prompt)
+    env_override = {
+        "ANTHROPIC_BASE_URL": _GLM_BASE_URL,
+        "ANTHROPIC_AUTH_TOKEN": api_key,
+        # None = delete from child env (see _build_proc_env). Strips any
+        # inherited Anthropic key so it cannot be sent to the Z.ai endpoint.
+        "ANTHROPIC_API_KEY": None,
+    }
+    return command, perm + ["--system-prompt", system_prompt] + base_args, env_override
+
+
 def _build_cursor_args(inv: AgentInvocation) -> tuple[str, list, dict | None]:
     perm = permission_flags(inv.cli, inv.permission)
     # Forward CLI_API_KEY (skill contract) as CURSOR_API_KEY (cursor's native
@@ -126,6 +179,7 @@ _BUILDERS = {
     "gemini": _build_gemini_args,
     "codex": _build_codex_args,
     "cursor-agent": _build_cursor_args,
+    "glm": _build_glm_args,
 }
 
 

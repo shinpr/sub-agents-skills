@@ -12,6 +12,10 @@ class TestResolveCli:
         assert resolve_cli("claude") == "claude"
         assert resolve_cli("codex") == "codex"
 
+    def test_glm_frontmatter_is_valid_target(self):
+        # glm is a valid run-agent target even though it is never a caller.
+        assert resolve_cli("glm") == "glm"
+
     def test_default_fallback(self):
         # No frontmatter and no caller env -> default
         with patch.dict("os.environ", {}, clear=True):

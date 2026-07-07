@@ -63,6 +63,12 @@ class TestBuildCommand:
             "test prompt",
         ]
 
+    def test_glm_reuses_claude_binary_and_argv(self):
+        # glm runs the claude binary, so build_command returns the claude shape.
+        cmd, args = build_command("glm", "test prompt")
+        assert cmd == "claude"
+        assert args == ["--output-format", "stream-json", "--verbose", "-p", "test prompt"]
+
     def test_unknown_cli_raises_error(self):
         with pytest.raises(ValueError, match="Unknown CLI"):
             build_command("unknown-cli", "test prompt")
@@ -141,6 +147,49 @@ class TestBuildInvocationArgs:
         assert "-a" not in args
         assert env == {"CURSOR_API_KEY": "sk-secret"}
 
+    def test_glm_uses_replace_system_prompt_and_injects_zai_env(self):
+        with patch.dict("os.environ", {"CLI_API_KEY": "zai-secret"}):
+            cmd, args, env = build_invocation_args(_inv("glm"))
+        assert cmd == "claude"
+        # Full replace, NOT append — GLM runs on the agent def alone.
+        assert "--system-prompt" in args
+        assert "--append-system-prompt" not in args
+        sp_idx = args.index("--system-prompt")
+        system_prompt_value = args[sp_idx + 1]
+        assert "cwd: /test/cwd" in system_prompt_value
+        assert "Agent definition" in system_prompt_value
+        p_idx = args.index("-p")
+        assert args[p_idx + 1] == "User task"
+        # Endpoint + credential routed via env; secret never in argv.
+        # ANTHROPIC_API_KEY is mapped to None so _build_proc_env strips any
+        # inherited Anthropic key from the child env (see executor tests).
+        assert env == {
+            "ANTHROPIC_BASE_URL": "https://api.z.ai/api/anthropic",
+            "ANTHROPIC_AUTH_TOKEN": "zai-secret",
+            "ANTHROPIC_API_KEY": None,
+        }
+        assert "zai-secret" not in args
+
+    def test_glm_strips_inherited_anthropic_api_key(self):
+        # Even when the parent process has a real ANTHROPIC_API_KEY, the glm
+        # override marks it for removal (None) so it never reaches Z.ai.
+        with patch.dict("os.environ", {"CLI_API_KEY": "zai-secret", "ANTHROPIC_API_KEY": "sk-ant-real"}):
+            _, _, env = build_invocation_args(_inv("glm"))
+        assert env["ANTHROPIC_API_KEY"] is None
+        assert env["ANTHROPIC_AUTH_TOKEN"] == "zai-secret"
+
+    def test_glm_missing_key_raises_config_error(self):
+        env_no_key = {k: v for k, v in os.environ.items() if k != "CLI_API_KEY"}
+        with patch.dict("os.environ", env_no_key, clear=True):
+            with pytest.raises(ValueError, match="CLI_API_KEY"):
+                build_invocation_args(_inv("glm"))
+
+    def test_glm_blank_key_raises_config_error(self):
+        # Whitespace-only key must be treated as missing, not forwarded to Z.ai.
+        with patch.dict("os.environ", {"CLI_API_KEY": "   "}):
+            with pytest.raises(ValueError, match="CLI_API_KEY"):
+                build_invocation_args(_inv("glm"))
+
     def test_unknown_cli_raises(self):
         with pytest.raises(ValueError, match="Unknown CLI"):
             build_invocation_args(_inv("totally-fake-cli"))
@@ -163,6 +212,12 @@ class TestPermissionFlags:
         assert permission_flags("claude", "read-only") == ["--permission-mode", "plan"]
         assert permission_flags("claude", "safe-edit") == ["--permission-mode", "acceptEdits"]
         assert permission_flags("claude", "yolo") == ["--dangerously-skip-permissions"]
+
+    def test_glm_flags_match_claude(self):
+        # glm drives the claude binary, so approval flags are identical.
+        assert permission_flags("glm", "read-only") == ["--permission-mode", "plan"]
+        assert permission_flags("glm", "safe-edit") == ["--permission-mode", "acceptEdits"]
+        assert permission_flags("glm", "yolo") == ["--dangerously-skip-permissions"]
 
     def test_gemini_flags(self):
         # --skip-trust lives in build_command (headless prerequisite), not in

@@ -14,8 +14,28 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from _builder import AgentInvocation
-from _executor import build_final_response, execute_agent
+from _executor import _build_proc_env, build_final_response, execute_agent
 from run_subagent import main
+
+
+class TestBuildProcEnv:
+    def test_none_returns_none(self):
+        assert _build_proc_env(None) is None
+        assert _build_proc_env({}) is None
+
+    def test_sets_and_overrides_keys(self):
+        with patch.dict("os.environ", {"EXISTING": "old"}, clear=True):
+            env = _build_proc_env({"NEW": "v", "EXISTING": "new"})
+        assert env["NEW"] == "v"
+        assert env["EXISTING"] == "new"
+
+    def test_none_value_deletes_inherited_key(self):
+        # glm relies on this to strip an inherited ANTHROPIC_API_KEY so it is
+        # never sent to the Z.ai endpoint.
+        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-ant-real"}, clear=True):
+            env = _build_proc_env({"ANTHROPIC_AUTH_TOKEN": "zai", "ANTHROPIC_API_KEY": None})
+        assert "ANTHROPIC_API_KEY" not in env
+        assert env["ANTHROPIC_AUTH_TOKEN"] == "zai"
 
 
 class TestBuildFinalResponse:
