@@ -6,7 +6,7 @@ allowed-tools: Bash Read
 
 # Sub-Agents - External CLI AI Task Delegation
 
-Spawns external CLI AIs (claude, cursor-agent, codex, gemini) as isolated sub-agents with dedicated context.
+Spawns external CLI AIs (claude, cursor-agent, codex, gemini, glm) as isolated sub-agents with dedicated context.
 
 ## Resources
 
@@ -99,6 +99,12 @@ Parse JSON output and check `status` field:
 | `partial` | Timeout but has output | Review partial `result`, may need retry |
 | `error` | Execution failed | Check `error` field and `exit_code`, fix and retry |
 
+**Configuration/credential errors persist until fixed.** When the `error` field
+reports a missing or unset requirement (e.g. an environment variable such as
+`CLI_API_KEY`), report it to the user, follow the specific instruction carried
+in the `error` field, and treat the current run as finished pending their fix.
+The same call keeps failing until the configuration is corrected.
+
 **By exit_code** (when status is `error`):
 
 | exit_code | Meaning | Resolution |
@@ -117,7 +123,7 @@ Parse JSON output and check `status` field:
 | `--prompt` | Yes* | Task description to delegate |
 | `--cwd` | Yes* | Working directory (absolute path) |
 | `--timeout` | No | Timeout ms (default: 600000) |
-| `--cli` | No | Force CLI: `claude`, `cursor-agent`, `codex`, `gemini` |
+| `--cli` | No | Force CLI: `claude`, `cursor-agent`, `codex`, `gemini`, `glm` |
 
 *Required when not using --list
 
@@ -157,7 +163,7 @@ How results should be structured.
 
 | Field | Values | Description |
 |-------|--------|-------------|
-| `run-agent` | `codex`, `claude`, `cursor-agent`, `gemini` | Which CLI executes this agent |
+| `run-agent` | `codex`, `claude`, `cursor-agent`, `gemini`, `glm` | Which CLI executes this agent |
 | `permission` | `read-only`, `safe-edit` (default), `yolo` | Approval/sandbox level the sub-agent runs with |
 
 `permission` levels (mapped per-CLI by the skill):

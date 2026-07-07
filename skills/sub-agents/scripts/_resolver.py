@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import os
 
-_VALID_CLIS = ("claude", "cursor-agent", "codex", "gemini")
+# glm is a valid frontmatter target (it runs the claude binary against a GLM
+# endpoint) but never a *caller* — you don't run "inside glm" — so it is absent
+# from detect_caller_cli below.
+_VALID_CLIS = ("claude", "cursor-agent", "codex", "gemini", "glm")
 
 
 def detect_caller_cli() -> str | None:

@@ -221,13 +221,31 @@ def _drive_process(process: subprocess.Popen, cli: str, timeout_ms: int) -> dict
         )
 
 
+def _build_proc_env(env_override: dict | None) -> dict | None:
+    """Merge ``env_override`` onto ``os.environ`` for the child process.
+
+    A ``None`` value deletes that key from the child env rather than setting it.
+    The glm backend uses this to strip an inherited ``ANTHROPIC_API_KEY`` so it
+    cannot be sent to the Z.ai endpoint and collide with our Bearer token.
+    """
+    if not env_override:
+        return None
+    proc_env = {**os.environ}
+    for key, value in env_override.items():
+        if value is None:
+            proc_env.pop(key, None)
+        else:
+            proc_env[key] = value
+    return proc_env
+
+
 def execute_agent(inv: AgentInvocation, timeout_ms: int = 600000) -> dict:
     """Execute agent CLI for the given invocation. Returns a response dict.
 
     Response shape: ``{result, exit_code, status, cli, error?}``.
     """
     command, args, env_override = build_invocation_args(inv)
-    proc_env = {**os.environ, **env_override} if env_override else None
+    proc_env = _build_proc_env(env_override)
 
     try:
         # stdin=DEVNULL: sub-agent CLIs (notably codex) probe stdin for "additional

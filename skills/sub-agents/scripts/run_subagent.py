@@ -5,11 +5,13 @@ Usage:
     scripts/run_subagent.py --agent <name> --prompt "<task>" --cwd <path>
     scripts/run_subagent.py --list
 
-Supported CLIs: claude, cursor-agent, codex, gemini.
+Supported CLIs: claude, cursor-agent, codex, gemini, glm.
 
 Environment:
     SUB_AGENTS_DIR: Override default agents directory ({cwd}/.agents/).
-    CLI_API_KEY:    Forwarded as CURSOR_API_KEY to cursor-agent (env, never argv).
+    CLI_API_KEY:    Forwarded as CURSOR_API_KEY to cursor-agent, and as
+                    ANTHROPIC_AUTH_TOKEN to glm (env, never argv). Required
+                    for glm.
 
 Implementation is split into sibling modules:
     _loader.py   - frontmatter parsing and agent discovery
@@ -36,8 +38,11 @@ from _loader import get_agents_dir, list_agents, load_agent  # noqa: E402
 from _resolver import resolve_cli  # noqa: E402
 
 
-def _print_error(error: str, exit_code: int = 1) -> None:
-    print(json.dumps({"result": "", "exit_code": exit_code, "status": "error", "error": error}))
+def _print_error(error: str, exit_code: int = 1, cli: str | None = None) -> None:
+    payload = {"result": "", "exit_code": exit_code, "status": "error", "error": error}
+    if cli is not None:
+        payload["cli"] = cli
+    print(json.dumps(payload))
 
 
 def main() -> None:
@@ -50,7 +55,9 @@ def main() -> None:
     parser.add_argument(
         "--timeout", type=int, default=600000, help="Timeout in ms (default: 600000)"
     )
-    parser.add_argument("--cli", help="Force specific CLI (claude, cursor-agent, codex, gemini)")
+    parser.add_argument(
+        "--cli", help="Force specific CLI (claude, cursor-agent, codex, gemini, glm)"
+    )
 
     args = parser.parse_args()
 
@@ -104,7 +111,7 @@ def main() -> None:
     try:
         result = execute_agent(invocation, timeout_ms=args.timeout)
     except ValueError as e:
-        _print_error(str(e))
+        _print_error(str(e), cli=cli)
         sys.exit(1)
 
     print(json.dumps(result, ensure_ascii=False))
