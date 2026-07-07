@@ -15,6 +15,7 @@ graph LR
     B --> C["Codex"]
     B --> D["Claude Code"]
     B --> E["Cursor CLI"]
+    B --> G["GLM (Z.ai)"]
     B --> F["Gemini CLI"]
     style B fill:#f5f5f5,stroke:#333
 ```
