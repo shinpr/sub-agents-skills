@@ -63,6 +63,18 @@ class TestBuildCommand:
             "test prompt",
         ]
 
+    def test_grok_returns_json_command_with_turn_budget(self):
+        cmd, args = build_command("grok", "test prompt")
+        assert cmd == "grok"
+        assert args == [
+            "--output-format",
+            "json",
+            "--always-approve",
+            "--verbatim",
+            "-p",
+            "test prompt",
+        ]
+
     def test_glm_reuses_claude_binary_and_argv(self):
         # glm runs the claude binary, so build_command returns the claude shape.
         cmd, args = build_command("glm", "test prompt")
@@ -121,6 +133,22 @@ class TestBuildInvocationArgs:
         cmd, args, env = build_invocation_args(_inv("codex"))
         assert cmd == "codex"
         prompt_arg = args[-1]
+        assert "[System Context]" in prompt_arg
+        assert "Agent definition" in prompt_arg
+        assert "[User Prompt]" in prompt_arg
+        assert "User task" in prompt_arg
+        assert env is None
+
+    def test_grok_concatenates_prompt_and_sets_cwd(self):
+        cmd, args, env = build_invocation_args(_inv("grok"))
+        assert cmd == "grok"
+        assert "--system-prompt-override" not in args
+        assert "--cwd" in args
+        cwd_idx = args.index("--cwd")
+        assert args[cwd_idx + 1] == "/test/cwd"
+        assert "-p" in args
+        p_idx = args.index("-p")
+        prompt_arg = args[p_idx + 1]
         assert "[System Context]" in prompt_arg
         assert "Agent definition" in prompt_arg
         assert "[User Prompt]" in prompt_arg
@@ -231,6 +259,11 @@ class TestPermissionFlags:
         assert permission_flags("cursor-agent", "safe-edit") == ["--trust"]
         assert permission_flags("cursor-agent", "yolo") == ["-f", "--trust"]
 
+    def test_grok_flags(self):
+        assert permission_flags("grok", "read-only") == ["--permission-mode", "dontAsk"]
+        assert permission_flags("grok", "safe-edit") == ["--permission-mode", "auto"]
+        assert permission_flags("grok", "yolo") == ["--permission-mode", "bypassPermissions"]
+
     def test_unknown_cli_raises(self):
         """Unknown CLI in permission mapping is a programmer error — fail fast."""
         with pytest.raises(ValueError, match="No permission mapping"):
@@ -299,3 +332,17 @@ class TestPermissionAppliedToCommand:
             )
         )
         assert "--trust" in args
+
+    def test_grok_safe_edit_in_args(self):
+        _, args, _ = build_invocation_args(
+            AgentInvocation(
+                cli="grok",
+                prompt="Task",
+                cwd="/test/cwd",
+                system_context="Agent",
+                permission="safe-edit",
+            )
+        )
+        assert "--permission-mode" in args
+        idx = args.index("--permission-mode")
+        assert args[idx + 1] == "auto"

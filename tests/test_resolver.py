@@ -16,6 +16,9 @@ class TestResolveCli:
         # glm is a valid run-agent target even though it is never a caller.
         assert resolve_cli("glm") == "glm"
 
+    def test_grok_frontmatter_is_valid_target(self):
+        assert resolve_cli("grok") == "grok"
+
     def test_default_fallback(self):
         # No frontmatter and no caller env -> default
         with patch.dict("os.environ", {}, clear=True):
@@ -36,6 +39,10 @@ class TestDetectCallerCli:
     def test_detects_codex_from_env(self):
         with patch.dict("os.environ", {"CODEX_CLI": "1"}, clear=True):
             assert detect_caller_cli() == "codex"
+
+    def test_detects_grok_from_env(self):
+        with patch.dict("os.environ", {"GROK_CLI": "1"}, clear=True):
+            assert detect_caller_cli() == "grok"
 
     def test_returns_none_when_no_indicator(self):
         """No env indicator and /proc absent — must return None deterministically."""

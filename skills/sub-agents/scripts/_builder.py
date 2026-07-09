@@ -43,6 +43,16 @@ def build_command(cli: str, prompt: str) -> tuple[str, list]:
         # which deadlocks here.
         return "gemini", ["--skip-trust", "--output-format", "stream-json", "-p", prompt]
 
+    if cli == "grok":
+        return "grok", [
+            "--output-format",
+            "json",
+            "--always-approve",
+            "--verbatim",
+            "-p",
+            prompt,
+        ]
+
     if cli == "cursor-agent":
         # API key is forwarded via CURSOR_API_KEY env (in build_invocation_args),
         # never via argv — argv would expose the secret in `ps` output.
@@ -71,6 +81,11 @@ _PERMISSION_MAPPING = {
         "read-only": ["--mode", "plan"],
         "safe-edit": ["--trust"],
         "yolo": ["-f", "--trust"],
+    },
+    "grok": {
+        "read-only": ["--permission-mode", "dontAsk"],
+        "safe-edit": ["--permission-mode", "auto"],
+        "yolo": ["--permission-mode", "bypassPermissions"],
     },
 }
 
@@ -116,6 +131,14 @@ def _build_gemini_args(inv: AgentInvocation) -> tuple[str, list, dict | None]:
 def _build_codex_args(inv: AgentInvocation) -> tuple[str, list, dict | None]:
     perm = permission_flags(inv.cli, inv.permission)
     return _concatenated_args(inv, perm, env=None)
+
+
+def _build_grok_args(inv: AgentInvocation) -> tuple[str, list, dict | None]:
+    perm = permission_flags(inv.cli, inv.permission)
+    command, base_args = build_command(inv.cli, inv.prompt)
+    formatted_prompt = f"[System Context]\n{inv.system_context}\n\n[User Prompt]\n{inv.prompt}"
+    _, base_args = build_command(inv.cli, formatted_prompt)
+    return command, perm + ["--cwd", inv.cwd] + base_args, None
 
 
 # GLM's Anthropic-compatible endpoint (Z.ai). Constant, not user-facing.
@@ -180,6 +203,7 @@ _BUILDERS = {
     "codex": _build_codex_args,
     "cursor-agent": _build_cursor_args,
     "glm": _build_glm_args,
+    "grok": _build_grok_args,
 }
 
 
