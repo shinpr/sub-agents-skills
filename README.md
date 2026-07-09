@@ -7,7 +7,7 @@
 
 **Orchestrate any LLM as a sub-agent from any AI coding tool.**
 
-Use Codex, Claude Code, Cursor CLI, and Gemini CLI as sub-agents within a single workflow — regardless of which tool you're running. Define task-specific agents once in markdown, and execute them on any backend.
+Use Codex, Claude Code, Cursor CLI, GLM (Z.ai), Grok Build, and Gemini CLI as sub-agents within a single workflow — regardless of which tool you're running. Define task-specific agents once in markdown, and execute them on any backend.
 
 ```mermaid
 graph LR
@@ -15,6 +15,7 @@ graph LR
     B --> C["Codex"]
     B --> D["Claude Code"]
     B --> E["Cursor CLI"]
+    B --> H["Grok Build"]
     B --> G["GLM (Z.ai)"]
     B --> F["Gemini CLI"]
     style B fill:#f5f5f5,stroke:#333
@@ -26,8 +27,8 @@ Most major AI coding agents now have built-in sub-agents — but only for their 
 
 This skill removes that restriction:
 
-- **Cross-LLM orchestration** — Use whichever model fits each task — for example, Codex for a quick edit, Claude Code for a deeper pass, or Gemini CLI when a larger context window helps — all from the same parent session.
-- **No vendor lock-in** — Your agent definitions are plain markdown files that work with Codex, Claude Code, Cursor CLI, Gemini CLI, VS Code, and [30+ other tools](https://agentskills.io) that support the Agent Skills format, so switching IDEs or LLM providers doesn't mean rewriting your workflow.
+- **Cross-LLM orchestration** — Use whichever model fits each task — for example, Codex for a quick edit, Claude Code for a deeper pass, or Grok Build for another implementation pass — all from the same parent session.
+- **No vendor lock-in** — Your agent definitions are plain markdown files that work with Codex, Claude Code, Cursor CLI, GLM (Z.ai), Grok Build, Gemini CLI, VS Code, and [30+ other tools](https://agentskills.io) that support the Agent Skills format, so switching IDEs or LLM providers doesn't mean rewriting your workflow.
 - **Bring Your Own Model** — Choose which model handles each task and pay each provider directly at their API rates.
 - **Team portability** — Share agent definitions across your team regardless of IDE or preferred LLM.
 ## Supported Backends
@@ -39,8 +40,9 @@ Each agent definition specifies which CLI runs it via the `run-agent` frontmatte
 | **Codex** (OpenAI) | `codex` | `npm install -g @openai/codex` |
 | **Claude Code** (Anthropic) | `claude` | `curl -fsSL https://claude.ai/install.sh \| bash` |
 | **Cursor** | `cursor-agent` | `curl https://cursor.com/install -fsS \| bash` |
-| **Gemini** (Google) | `gemini` | `npm install -g @google/gemini-cli` |
 | **GLM** (Z.ai) | `claude` (GLM endpoint) | Uses the Claude Code binary (see below) |
+| **Grok Build** (SpaceX AI) | `grok` | `curl -fsSL https://x.ai/cli/install.sh \| bash` |
+| **Gemini** (Google) | `gemini` | `npm install -g @google/gemini-cli` |
 
 You only need to install the backends you plan to use.
 
@@ -82,6 +84,13 @@ After restart, invoke the skill as `$runner:sub-agents`.
 /plugin marketplace add shinpr/sub-agents-skills
 /plugin install runner@sub-agents-skills
 /reload-plugins
+```
+
+**Grok Build (plugin):**
+
+```sh
+grok plugin marketplace add shinpr/sub-agents-skills
+grok plugin install runner --trust
 ```
 
 **Other clients (Cursor CLI, Gemini CLI, VS Code, etc.):**
@@ -143,6 +152,7 @@ Sub-agents may fail to execute shell commands with permission errors. This happe
    codex           # For Codex users
    claude          # For Claude Code users
    cursor-agent    # For Cursor CLI users
+   grok            # For Grok Build users
    gemini          # For Gemini CLI users
    ```
 
@@ -176,7 +186,7 @@ You can have agents that use different LLMs side by side:
 .agents/
 ├── test-writer.md      # run-agent: codex   (fast generation)
 ├── code-reviewer.md    # run-agent: claude  (strong reasoning)
-└── doc-writer.md       # run-agent: gemini  (large context window)
+└── implementer.md      # run-agent: grok   (alternate implementation pass)
 ```
 
 ```
@@ -220,18 +230,18 @@ One-sentence purpose.
 
 | Field | Values | Description |
 |-------|--------|-------------|
-| `run-agent` | `codex`, `claude`, `cursor-agent`, `gemini`, `glm` | Which CLI executes this agent |
+| `run-agent` | `codex`, `claude`, `cursor-agent`, `glm`, `grok`, `gemini` | Which CLI executes this agent |
 | `permission` | `read-only`, `safe-edit` (default), `yolo` | Approval/sandbox level the sub-agent runs with |
 
 If `run-agent` is not specified, the skill auto-detects the caller environment or defaults to `codex`.
 
 **Permission levels:**
 
-- `read-only` — investigation/review only, no edits or shell writes (codex `-s read-only` / claude `--permission-mode plan` / gemini `--approval-mode plan` / cursor `--mode plan`)
-- `safe-edit` — auto-approve edits inside the workspace, suppress prompts (default; codex `-s workspace-write` + `approval_policy=never` / claude `--permission-mode acceptEdits` / gemini `--approval-mode auto_edit` / cursor `--trust`)
+- `read-only` — investigation/review only, no edits or shell writes (codex `-s read-only` / claude `--permission-mode plan` / cursor `--mode plan` / grok `--permission-mode dontAsk` / gemini `--approval-mode plan`)
+- `safe-edit` — auto-approve edits inside the workspace, suppress prompts (default; codex `-s workspace-write` + `approval_policy=never` / claude `--permission-mode acceptEdits` / cursor `--trust` / grok `--permission-mode auto` / gemini `--approval-mode auto_edit`)
 - `yolo` — bypass all approvals and sandboxing. Use with care.
 
-Sub-agents have no stdin, so any approval prompt would deadlock the run. The default `safe-edit` keeps writes confined to the workspace while suppressing prompts.
+Sub-agents have no stdin, so any approval prompt would deadlock the run. The default `safe-edit` keeps writes confined to the workspace while suppressing prompts. Grok Build runs with `--always-approve`; `permission` still selects Grok's permission mode.
 
 ### Keep Agents Self-Contained
 
@@ -311,7 +321,7 @@ To customize: `export SUB_AGENTS_DIR=/custom/path`
 | `--prompt` | Yes* | Task description to delegate |
 | `--cwd` | Yes* | Working directory (absolute path) |
 | `--timeout` | No | Timeout ms (default: 600000) |
-| `--cli` | No | Force CLI: `codex`, `claude`, `cursor-agent`, `gemini`, `glm` |
+| `--cli` | No | Force CLI: `codex`, `claude`, `cursor-agent`, `glm`, `grok`, `gemini` |
 
 *Required when not using --list
 
@@ -331,11 +341,11 @@ Make sure the CLI is installed and accessible in your `PATH`.
 **Cursor CLI:**
 Run `cursor-agent login` to authenticate. Sessions can expire, so just run this command again if you see auth errors.
 
-**Gemini CLI:**
-Set `GEMINI_API_KEY` in the environment — without it the `gemini` backend won't run (Google is retiring the free OAuth tier on June 18, 2026).
-
 **GLM:**
 Set `CLI_API_KEY` to your Z.ai token — an unset key returns a configuration error (see [GLM (Z.ai)](#glm-zai)).
+
+**Gemini CLI:**
+Set `GEMINI_API_KEY` in the environment — without it the `gemini` backend won't run (Google is retiring the free OAuth tier on June 18, 2026).
 
 ### Agent not found
 
@@ -350,6 +360,7 @@ Install the required CLI:
 - Codex: `npm install -g @openai/codex`
 - Claude Code: `curl -fsSL https://claude.ai/install.sh | bash`
 - Cursor CLI: `curl https://cursor.com/install -fsS | bash`
+- Grok Build: `curl -fsSL https://x.ai/cli/install.sh | bash`
 - Gemini CLI: `npm install -g @google/gemini-cli`
 
 ### Other execution errors
@@ -370,7 +381,7 @@ The main agent stays lightweight too. It coordinates work without accumulating a
 
 ### Agent Skills as an Open Standard
 
-This skill uses the [Agent Skills](https://agentskills.io) format—a convention for packaging reusable AI agent capabilities as portable files. The format is supported by Codex, Claude Code, Cursor CLI, Gemini CLI, and [30+ other tools](https://agentskills.io), so the same skill works across environments without modification.
+This skill uses the [Agent Skills](https://agentskills.io) format—a convention for packaging reusable AI agent capabilities as portable files. The format is supported by Codex, Claude Code, Cursor CLI, Grok Build, Gemini CLI, and [30+ other tools](https://agentskills.io), so the same skill works across environments without modification.
 
 ## How It Works
 

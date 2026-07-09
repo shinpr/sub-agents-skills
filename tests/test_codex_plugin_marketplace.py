@@ -39,6 +39,29 @@ def test_codex_plugin_manifest_points_to_copied_skills():
     assert (skills_path / "sub-agents" / "SKILL.md").is_file()
 
 
+def test_grok_marketplace_uses_non_root_plugin_path():
+    marketplace = json.loads((REPO_ROOT / ".grok-plugin" / "marketplace.json").read_text())
+
+    [plugin] = marketplace["plugins"]
+
+    assert plugin["name"] == "runner"
+    assert plugin["source"] == {
+        "source": "local",
+        "path": "./plugins/runner",
+    }
+
+
+def test_grok_plugin_manifest_points_to_copied_skills():
+    plugin_root = REPO_ROOT / "plugins" / "runner"
+    manifest = json.loads((plugin_root / "plugin.json").read_text())
+
+    skills_path = (plugin_root / manifest["skills"]).resolve()
+
+    assert manifest["name"] == "runner"
+    assert skills_path == (plugin_root / "skills").resolve()
+    assert (skills_path / "sub-agents" / "SKILL.md").is_file()
+
+
 def test_codex_plugin_skill_copy_matches_canonical_skill():
     canonical = REPO_ROOT / "skills" / "sub-agents"
     copied = REPO_ROOT / "plugins" / "runner" / "skills" / "sub-agents"
@@ -67,6 +90,7 @@ def test_manifest_versions_match_project_version():
     manifest_paths = [
         REPO_ROOT / ".claude-plugin" / "plugin.json",
         REPO_ROOT / "plugins" / "runner" / ".codex-plugin" / "plugin.json",
+        REPO_ROOT / "plugins" / "runner" / "plugin.json",
     ]
 
     for manifest_path in manifest_paths:
@@ -74,6 +98,10 @@ def test_manifest_versions_match_project_version():
         assert manifest["version"] == project_version
 
     marketplace = json.loads((REPO_ROOT / ".claude-plugin" / "marketplace.json").read_text())
+    [plugin] = marketplace["plugins"]
+    assert plugin["version"] == project_version
+
+    marketplace = json.loads((REPO_ROOT / ".grok-plugin" / "marketplace.json").read_text())
     [plugin] = marketplace["plugins"]
     assert plugin["version"] == project_version
 

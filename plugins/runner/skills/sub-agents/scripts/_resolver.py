@@ -7,7 +7,7 @@ import os
 # glm is a valid frontmatter target (it runs the claude binary against a GLM
 # endpoint) but never a *caller* — you don't run "inside glm" — so it is absent
 # from detect_caller_cli below.
-_VALID_CLIS = ("claude", "cursor-agent", "codex", "gemini", "glm")
+_VALID_CLIS = ("codex", "claude", "cursor-agent", "glm", "grok", "gemini")
 
 
 def detect_caller_cli() -> str | None:
@@ -25,6 +25,8 @@ def detect_caller_cli() -> str | None:
         return "codex"
     if os.environ.get("GEMINI_CLI"):
         return "gemini"
+    if os.environ.get("GROK_CLI"):
+        return "grok"
 
     try:
         ppid = os.getppid()
@@ -40,6 +42,8 @@ def detect_caller_cli() -> str | None:
                     return "codex"
                 if "gemini" in cmdline:
                     return "gemini"
+                if "grok" in cmdline:
+                    return "grok"
     except (FileNotFoundError, PermissionError, OSError):
         # /proc absent on macOS, may be unreadable under sandbox. Caller
         # detection is best-effort — fall through silently.

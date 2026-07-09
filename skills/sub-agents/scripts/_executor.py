@@ -57,7 +57,9 @@ def build_final_response(
     """
     exit_code = returncode if returncode is not None else 1
 
-    if result and (terminated_by_us or exit_code in _SUCCESS_EXIT_CODES):
+    if result and result.get("status") == "partial" and not terminated_by_us:
+        status = "partial"
+    elif result and (terminated_by_us or exit_code in _SUCCESS_EXIT_CODES):
         status = "success"
     elif result:
         status = "partial"
@@ -203,10 +205,15 @@ def _drive_process(process: subprocess.Popen, cli: str, timeout_ms: int) -> dict
             _, stderr = process.communicate()
             return _timeout_payload(cli, processor, timeout_ms)
 
+        result = processor.get_result()
+        if result is None:
+            processor.process_complete_output("".join(stdout_lines))
+            result = processor.get_result()
+
         return build_final_response(
             cli,
             process.returncode,
-            processor.get_result(),
+            result,
             stdout_lines,
             stderr,
             terminated_by_us=saw_terminal,
@@ -239,21 +246,21 @@ def _build_proc_env(env_override: dict | None) -> dict | None:
     return proc_env
 
 
-def execute_agent(inv: AgentInvocation, timeout_ms: int = 600000) -> dict:
-    """Execute agent CLI for the given invocation. Returns a response dict.
-
-    Response shape: ``{result, exit_code, status, cli, error?}``.
-    """
-    command, args, env_override = build_invocation_args(inv)
-    proc_env = _build_proc_env(env_override)
-
+def _spawn_and_drive(
+    command: str,
+    args: list,
+    proc_env: dict | None,
+    cwd: str,
+    cli: str,
+    timeout_ms: int,
+) -> dict:
     try:
         # stdin=DEVNULL: sub-agent CLIs (notably codex) probe stdin for "additional
         # input" and block reading from a TTY inherited from the parent. We never
         # have stdin to give them.
         process = subprocess.Popen(
             [command, *args],
-            cwd=inv.cwd,
+            cwd=cwd,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -267,8 +274,18 @@ def execute_agent(inv: AgentInvocation, timeout_ms: int = 600000) -> dict:
             env=proc_env,
         )
     except FileNotFoundError:
-        return _error_response(inv.cli, 127, f"CLI not found: {command}")
+        return _error_response(cli, 127, f"CLI not found: {command}")
     except OSError as e:
-        return _error_response(inv.cli, 1, f"{type(e).__name__}: {e}")
+        return _error_response(cli, 1, f"{type(e).__name__}: {e}")
 
-    return _drive_process(process, inv.cli, timeout_ms)
+    return _drive_process(process, cli, timeout_ms)
+
+
+def execute_agent(inv: AgentInvocation, timeout_ms: int = 600000) -> dict:
+    """Execute agent CLI for the given invocation. Returns a response dict.
+
+    Response shape: ``{result, exit_code, status, cli, error?}``.
+    """
+    command, args, env_override = build_invocation_args(inv)
+    proc_env = _build_proc_env(env_override)
+    return _spawn_and_drive(command, args, proc_env, inv.cwd, inv.cli, timeout_ms)

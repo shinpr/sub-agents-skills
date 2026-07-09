@@ -5,7 +5,7 @@ Usage:
     scripts/run_subagent.py --agent <name> --prompt "<task>" --cwd <path>
     scripts/run_subagent.py --list
 
-Supported CLIs: claude, cursor-agent, codex, gemini, glm.
+Supported CLIs: codex, claude, cursor-agent, glm, grok, gemini.
 
 Environment:
     SUB_AGENTS_DIR: Override default agents directory ({cwd}/.agents/).
@@ -56,7 +56,7 @@ def main() -> None:
         "--timeout", type=int, default=600000, help="Timeout in ms (default: 600000)"
     )
     parser.add_argument(
-        "--cli", help="Force specific CLI (claude, cursor-agent, codex, gemini, glm)"
+        "--cli", help="Force specific CLI (codex, claude, cursor-agent, glm, grok, gemini)"
     )
 
     args = parser.parse_args()

@@ -62,6 +62,11 @@ class TestBuildFinalResponse:
         assert r["status"] == "partial"
         assert r["exit_code"] == 2
 
+    def test_result_marked_partial_stays_partial_even_with_zero_exit(self):
+        r = build_final_response("grok", 0, {"result": "progress", "status": "partial"}, [], "")
+        assert r["status"] == "partial"
+        assert r["exit_code"] == 0
+
     def test_terminated_by_us_with_result_is_success_regardless_of_exit_code(self):
         # Windows: terminate() maps to TerminateProcess and yields exit code 1,
         # unlike POSIX SIGTERM (143 / -15). When we asked the CLI to stop after a
@@ -277,6 +282,27 @@ class TestExecuteAgent:
                 popen_kwargs = mock_popen.call_args[1]
                 assert popen_kwargs["env"]["GEMINI_SYSTEM_MD"] == agent_file
 
+    def test_grok_pretty_json_output_is_parsed_after_exit(self):
+        mock_process = MagicMock()
+        mock_process.stdout.readline.side_effect = [
+            "{\n",
+            '  "text": "{\\"findings\\":[]}",\n',
+            '  "stopReason": "EndTurn",\n',
+            '  "sessionId": "s",\n',
+            '  "requestId": "r"\n',
+            "}\n",
+            "",
+        ]
+        mock_process.communicate.return_value = ("", "")
+        mock_process.returncode = 0
+
+        with patch("subprocess.Popen", return_value=mock_process):
+            result = execute_agent(
+                AgentInvocation(cli="grok", prompt="x", cwd="/tmp"),
+                timeout_ms=5000,
+            )
+        assert result["status"] == "success"
+        assert result["result"] == '{"findings":[]}'
 
 class TestMainEndToEnd:
     """Drive main() end-to-end with subprocess mocked. Verifies the JSON contract."""

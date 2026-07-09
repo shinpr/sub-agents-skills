@@ -1,7 +1,7 @@
 {
   "name": "runner",
-  "version": "0.5.0",
-  "description": "Sub-agent runner — runs agent definitions on Codex, Claude Code, Cursor CLI, Gemini CLI, or GLM (Z.ai) from any host AI tool.",
+  "version": "0.6.0",
+  "description": "Sub-agent runner — runs agent definitions on Codex, Claude Code, Cursor CLI, GLM (Z.ai), Grok Build, or Gemini CLI from any host AI tool.",
   "author": {
     "name": "Shinsuke Kagawa",
     "url": "https://github.com/shinpr"
@@ -16,15 +16,16 @@
     "codex",
     "claude-code",
     "cursor",
-    "gemini",
     "glm",
-    "z.ai"
+    "z.ai",
+    "grok",
+    "gemini"
   ],
   "skills": "./skills/",
   "interface": {
     "displayName": "Runner",
     "shortDescription": "Sub-agent runner for multiple AI CLIs.",
-    "longDescription": "Runs agent definitions as sub-agents on external CLI AIs (Codex, Claude Code, Cursor CLI, Gemini CLI, or GLM via Z.ai) with isolated context. Define agents once in markdown and run them on any supported backend from a single host session.",
+    "longDescription": "Runs agent definitions as sub-agents on external CLI AIs (Codex, Claude Code, Cursor CLI, GLM via Z.ai, Grok Build, or Gemini CLI) with isolated context. Define agents once in markdown and run them on any supported backend from a single host session.",
     "developerName": "Shinsuke Kagawa",
     "category": "Developer Tools",
     "capabilities": [
@@ -34,8 +35,9 @@
     "defaultPrompt": [
       "Run this task on Claude Code as a sub-agent.",
       "Delegate this refactor to Codex as a sub-agent.",
-      "Use Gemini CLI for the long-context analysis.",
-      "Review this code with GLM (Z.ai) as a low-cost sub-agent."
+      "Review this code with GLM (Z.ai) as a low-cost sub-agent.",
+      "Run this implementation task on Grok Build as a sub-agent.",
+      "Use Gemini CLI for the long-context analysis."
     ]
   }
 }
