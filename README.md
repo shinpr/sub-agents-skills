@@ -123,6 +123,7 @@ Create a `.agents/` folder in your project and add `code-reviewer.md`:
 ```markdown
 ---
 run-agent: codex
+permission: read-only
 ---
 
 # Code Reviewer
@@ -211,6 +212,7 @@ Each agent should do **one thing well**. Avoid "swiss army knife" agents.
 ```markdown
 ---
 run-agent: codex
+permission: safe-edit
 ---
 
 # Agent Name
@@ -267,6 +269,7 @@ Each `.md` or `.txt` file in your `.agents/` folder becomes an agent. The filena
 ```markdown
 ---
 run-agent: codex
+permission: read-only
 ---
 
 # Bug Investigator
