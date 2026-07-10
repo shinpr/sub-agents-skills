@@ -12,15 +12,15 @@ def _extract_trailing_json_object(text: str) -> str:
         return text
 
     decoder = json.JSONDecoder()
-    for index, char in enumerate(stripped):
-        if char != "{":
+    for index in range(len(stripped) - 1, -1, -1):
+        if stripped[index] != "{":
             continue
         try:
-            value, end = decoder.raw_decode(stripped[index:])
+            value, end = decoder.raw_decode(stripped, index)
         except json.JSONDecodeError:
             continue
-        if isinstance(value, dict) and stripped[index + end :].strip() == "":
-            return stripped[index : index + end]
+        if isinstance(value, dict) and stripped[end:].strip() == "":
+            return stripped[index:end]
     return text
 
 
@@ -106,6 +106,7 @@ class StreamProcessor:
                 self.result_json = data
             return True
 
+        # Top-level ``text`` without a ``type`` is Grok's JSON output shape.
         grok_result = _grok_json_result(data)
         if grok_result is not None:
             self.result_json = grok_result

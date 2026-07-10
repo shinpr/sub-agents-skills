@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from _stream import StreamProcessor
+from _stream import StreamProcessor, _extract_trailing_json_object
 
 
 class TestStreamProcessor:
@@ -60,6 +60,18 @@ class TestStreamProcessor:
         assert result["result"] == '{"findings":[]}'
         assert result["status"] == "success"
 
+    def test_grok_compact_json_line_cancelled_is_partial(self):
+        processor = StreamProcessor()
+        assert processor.process_line('{"text": "progress only", "stopReason": "Cancelled"}')
+        result = processor.get_result()
+        assert result["result"] == "progress only"
+        assert result["status"] == "partial"
+
+    def test_typeless_json_without_text_uses_fallback(self):
+        processor = StreamProcessor()
+        assert processor.process_line('{"message": "raw"}')
+        assert processor.get_result() == {"message": "raw"}
+
     def test_grok_complete_json_cancelled_is_partial(self):
         processor = StreamProcessor()
         assert processor.process_complete_output(
@@ -76,3 +88,7 @@ class TestStreamProcessor:
         )
         result = processor.get_result()
         assert result["result"] == '{"findings":[]}'
+
+    def test_extract_trailing_json_object_rejects_extra_suffix(self):
+        text = 'prefix {"findings":[]} trailing'
+        assert _extract_trailing_json_object(text) == text
