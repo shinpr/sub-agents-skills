@@ -304,6 +304,24 @@ class TestExecuteAgent:
         assert result["status"] == "success"
         assert result["result"] == '{"findings":[]}'
 
+    def test_grok_compact_json_output_is_normalized(self):
+        mock_process = MagicMock()
+        mock_process.stdout.readline.side_effect = [
+            '{"text": "{\\"findings\\":[]}", "stopReason": "EndTurn"}\n',
+            "",
+        ]
+        mock_process.communicate.return_value = ("", "")
+        mock_process.returncode = 0
+
+        with patch("subprocess.Popen", return_value=mock_process):
+            result = execute_agent(
+                AgentInvocation(cli="grok", prompt="x", cwd="/tmp"),
+                timeout_ms=5000,
+            )
+        assert result["status"] == "success"
+        assert result["result"] == '{"findings":[]}'
+
+
 class TestMainEndToEnd:
     """Drive main() end-to-end with subprocess mocked. Verifies the JSON contract."""
 

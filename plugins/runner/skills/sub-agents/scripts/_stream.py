@@ -24,6 +24,19 @@ def _extract_trailing_json_object(text: str) -> str:
     return text
 
 
+def _grok_json_result(data: dict) -> dict | None:
+    """Normalize Grok ``--output-format json`` output when present."""
+    if not isinstance(data.get("text"), str):
+        return None
+    return {
+        "type": "result",
+        "result": _extract_trailing_json_object(data["text"]),
+        "status": "success" if data.get("stopReason") == "EndTurn" else "partial",
+        "stop_reason": data.get("stopReason"),
+        "session_id": data.get("sessionId"),
+    }
+
+
 class StreamProcessor:
     """Process streaming JSON output from various CLIs.
 
@@ -31,17 +44,15 @@ class StreamProcessor:
     - Claude / Cursor: a single ``{"type": "result", "result": ...}`` line
     - Gemini stream: ``init`` then assistant ``message`` lines, ending with ``result``
     - Codex stream: ``thread.started`` then ``item.completed`` lines, ending with ``turn.completed``
-    - Grok stream: ``text`` chunks, ending with ``end``
+    - Grok json: a complete ``{"text": ..., "stopReason": ...}`` payload
     """
 
     def __init__(self):
         self.result_json = None
         self.gemini_parts = []
         self.codex_messages = []
-        self.grok_parts = []
         self.is_gemini = False
         self.is_codex = False
-        self.is_grok = False
 
     def process_line(self, line: str) -> bool:
         """Process one line. Returns True when a terminal event is reached."""
@@ -74,21 +85,6 @@ class StreamProcessor:
                 self.codex_messages.append(item["text"])
             return False
 
-        if data.get("type") == "text":
-            content = data.get("data", "")
-            if isinstance(content, str):
-                self.is_grok = True
-                self.grok_parts.append(content)
-            return False
-
-        if self.is_grok and data.get("type") == "end":
-            self.result_json = {
-                "type": "result",
-                "result": _extract_trailing_json_object("".join(self.grok_parts)),
-                "status": "success",
-            }
-            return True
-
         # Codex: turn.completed signals end
         if self.is_codex and data.get("type") == "turn.completed":
             self.result_json = {
@@ -110,6 +106,11 @@ class StreamProcessor:
                 self.result_json = data
             return True
 
+        grok_result = _grok_json_result(data)
+        if grok_result is not None:
+            self.result_json = grok_result
+            return True
+
         # Fallback: first valid JSON without type field
         if "type" not in data:
             self.result_json = data
@@ -127,14 +128,11 @@ class StreamProcessor:
         except json.JSONDecodeError:
             return False
 
-        if isinstance(data, dict) and isinstance(data.get("text"), str):
-            self.result_json = {
-                "type": "result",
-                "result": _extract_trailing_json_object(data["text"]),
-                "status": "success" if data.get("stopReason") == "EndTurn" else "partial",
-                "stop_reason": data.get("stopReason"),
-                "session_id": data.get("sessionId"),
-            }
+        if isinstance(data, dict):
+            grok_result = _grok_json_result(data)
+            if grok_result is None:
+                return False
+            self.result_json = grok_result
             return True
 
         return False
