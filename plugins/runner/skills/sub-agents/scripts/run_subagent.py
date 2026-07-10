@@ -57,9 +57,7 @@ def main() -> None:
         default=DEFAULT_TIMEOUT_MS,
         help=f"Timeout in ms (default: {DEFAULT_TIMEOUT_MS})",
     )
-    parser.add_argument(
-        "--cli", help=f"Force specific CLI ({SUPPORTED_CLIS_HELP})"
-    )
+    parser.add_argument("--cli", help=f"Force specific CLI ({SUPPORTED_CLIS_HELP})")
 
     args = parser.parse_args()
 
@@ -89,7 +87,7 @@ def main() -> None:
     agents_dir = get_agents_dir(args.agents_dir, args.cwd)
 
     try:
-        run_agent_cli, system_context, _, agent_file, permission = load_agent(
+        run_agent_cli, system_context, _, agent_file, permission, model = load_agent(
             agents_dir, args.agent
         )
     except (FileNotFoundError, ValueError) as e:
@@ -104,6 +102,7 @@ def main() -> None:
         system_context=system_context,
         agent_file=agent_file,
         permission=permission,
+        model=model,
     )
 
     # Surface configuration errors as JSON instead of tracebacks. CLI-side

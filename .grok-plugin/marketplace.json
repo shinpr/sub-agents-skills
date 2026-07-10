@@ -9,7 +9,7 @@
     {
       "name": "runner",
       "description": "Runner that executes agent definitions as sub-agents on Codex, Claude Code, Cursor CLI, GLM (Z.ai), Grok Build, Gemini CLI, or OpenCode.",
-      "version": "0.7.0",
+      "version": "0.8.0",
       "category": "development",
       "source": {
         "source": "local",

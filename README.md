@@ -63,10 +63,10 @@ The skill forwards it to the Claude binary as the Z.ai credential (via env, neve
 
 ### OpenCode
 
-The `opencode` backend runs whichever default model the user configured in
-OpenCode. This provides one generic route to OpenCode-supported providers,
-OpenAI-compatible APIs, gateways, and local models without adding a backend for
-every model service.
+The `opencode` backend runs a model selected in the agent definition, or the
+user's configured default when `model` is omitted. This provides one generic
+route to OpenCode-supported providers, OpenAI-compatible APIs, gateways, and
+local models without adding a backend for every model service.
 
 Configure the provider, credentials, and default model in
 `~/.config/opencode/opencode.json` or the project's `opencode.json`, then use:
@@ -74,12 +74,13 @@ Configure the provider, credentials, and default model in
 ```markdown
 ---
 run-agent: opencode
+model: provider/model-id
 permission: safe-edit
 ---
 ```
 
-The runner uses the provider and model resolved by OpenCode, keeping provider,
-credential, and model configuration in one place.
+OpenCode model values use `provider/model` syntax. The runner passes an explicit
+value through `--model`; without one, OpenCode resolves its configured default.
 
 ## Quick Start
 
@@ -236,6 +237,7 @@ Each agent should do **one thing well**. Avoid "swiss army knife" agents.
 ```markdown
 ---
 run-agent: codex
+model: gpt-5.4-mini
 permission: safe-edit
 ---
 
@@ -257,6 +259,7 @@ One-sentence purpose.
 | Field | Values | Description |
 |-------|--------|-------------|
 | `run-agent` | `codex`, `claude`, `cursor-agent`, `glm`, `grok`, `gemini`, `opencode` | Which CLI executes this agent |
+| `model` | Backend-specific model name (optional) | Model passed to the selected CLI; omit to use its configured default |
 | `permission` | `read-only`, `safe-edit` (default), `yolo` | Approval/sandbox level the sub-agent runs with |
 
 If `run-agent` is not specified, the skill auto-detects the caller environment or defaults to `codex`.
