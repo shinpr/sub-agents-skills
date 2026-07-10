@@ -7,9 +7,9 @@ from unittest.mock import patch
 
 import pytest
 from _builder import (
-    AgentInvocation,
     _BUILDERS,
     _PERMISSION_MAPPING,
+    AgentInvocation,
     build_command,
     build_invocation_args,
     permission_flags,
