@@ -7,7 +7,7 @@
 
 **Orchestrate any LLM as a sub-agent from any AI coding tool.**
 
-Use Codex, Claude Code, Cursor CLI, GLM (Z.ai), Grok Build, and Gemini CLI as sub-agents within a single workflow — regardless of which tool you're running. Define task-specific agents once in markdown, and execute them on any backend.
+Use Codex, Claude Code, Cursor CLI, GLM (Z.ai), Grok Build, Gemini CLI, and OpenCode as sub-agents within a single workflow — regardless of which tool you're running. Define task-specific agents once in markdown, and execute them on any backend.
 
 ```mermaid
 graph LR
@@ -18,6 +18,8 @@ graph LR
     B --> H["Grok Build"]
     B --> G["GLM (Z.ai)"]
     B --> F["Gemini CLI"]
+    B --> I["OpenCode"]
+    I --> J["Configured provider/model<br/>(API · gateway · local)"]
     style B fill:#f5f5f5,stroke:#333
 ```
 
@@ -43,6 +45,7 @@ Each agent definition specifies which CLI runs it via the `run-agent` frontmatte
 | **GLM** (Z.ai) | `claude` (GLM endpoint) | Uses the Claude Code binary (see below) |
 | **Grok Build** (SpaceX AI) | `grok` | `curl -fsSL https://x.ai/cli/install.sh \| bash` |
 | **Gemini** (Google) | `gemini` | `npm install -g @google/gemini-cli` |
+| **OpenCode** | `opencode` | `brew install anomalyco/tap/opencode` |
 
 You only need to install the backends you plan to use.
 
@@ -57,6 +60,26 @@ export CLI_API_KEY=<your-z.ai-token>
 ```
 
 The skill forwards it to the Claude binary as the Z.ai credential (via env, never argv) and points the binary at `https://api.z.ai/api/anthropic`. Requests are billed by Z.ai, not Anthropic. When `CLI_API_KEY` is unset, a `glm` run returns a configuration error asking you to set it.
+
+### OpenCode
+
+The `opencode` backend runs whichever default model the user configured in
+OpenCode. This provides one generic route to OpenCode-supported providers,
+OpenAI-compatible APIs, gateways, and local models without adding a backend for
+every model service.
+
+Configure the provider, credentials, and default model in
+`~/.config/opencode/opencode.json` or the project's `opencode.json`, then use:
+
+```markdown
+---
+run-agent: opencode
+permission: safe-edit
+---
+```
+
+The runner uses the provider and model resolved by OpenCode, keeping provider,
+credential, and model configuration in one place.
 
 ## Quick Start
 
@@ -155,6 +178,7 @@ Sub-agents may fail to execute shell commands with permission errors. This happe
    cursor-agent    # For Cursor CLI users
    grok            # For Grok Build users
    gemini          # For Gemini CLI users
+   opencode        # For OpenCode users
    ```
 
 2. When prompted to allow commands (e.g., "Add Shell(cd), Shell(make) to allowlist?"), approve them
@@ -232,18 +256,18 @@ One-sentence purpose.
 
 | Field | Values | Description |
 |-------|--------|-------------|
-| `run-agent` | `codex`, `claude`, `cursor-agent`, `glm`, `grok`, `gemini` | Which CLI executes this agent |
+| `run-agent` | `codex`, `claude`, `cursor-agent`, `glm`, `grok`, `gemini`, `opencode` | Which CLI executes this agent |
 | `permission` | `read-only`, `safe-edit` (default), `yolo` | Approval/sandbox level the sub-agent runs with |
 
 If `run-agent` is not specified, the skill auto-detects the caller environment or defaults to `codex`.
 
 **Permission levels:**
 
-- `read-only` — investigation/review only, no edits or shell writes (codex `-s read-only` / claude `--permission-mode plan` / cursor `--mode plan` / grok `--permission-mode dontAsk` / gemini `--approval-mode plan`)
-- `safe-edit` — auto-approve edits inside the workspace, suppress prompts (default; codex `-s workspace-write` + `approval_policy=never` / claude `--permission-mode acceptEdits` / cursor `--trust` / grok `--permission-mode auto` / gemini `--approval-mode auto_edit`)
+- `read-only` — investigation/review only, no edits or shell writes (codex `-s read-only` / claude `--permission-mode plan` / cursor `--mode plan` / grok `--permission-mode dontAsk` / gemini `--approval-mode plan` / OpenCode permission deny rules)
+- `safe-edit` — auto-approve edits inside the workspace, suppress prompts (default; codex `-s workspace-write` + `approval_policy=never` / claude `--permission-mode acceptEdits` / cursor `--trust` / grok `--permission-mode auto` / gemini `--approval-mode auto_edit` / OpenCode `external_directory: deny`)
 - `yolo` — bypass all approvals and sandboxing. Use with care.
 
-Sub-agents have no stdin, so any approval prompt would deadlock the run. The default `safe-edit` keeps writes confined to the workspace while suppressing prompts. Grok Build runs with `--always-approve`; `permission` still selects Grok's permission mode.
+Sub-agents have no stdin, so any approval prompt would deadlock the run. The default `safe-edit` keeps normal tool writes confined to the workspace while suppressing prompts. Grok Build runs with `--always-approve`; `permission` still selects Grok's permission mode. OpenCode permission controls are not an OS-level sandbox and cannot confine every side effect of arbitrary programs launched through bash.
 
 ### Keep Agents Self-Contained
 
@@ -324,7 +348,7 @@ To customize: `export SUB_AGENTS_DIR=/custom/path`
 | `--prompt` | Yes* | Task description to delegate |
 | `--cwd` | Yes* | Working directory (absolute path) |
 | `--timeout` | No | Timeout ms (default: 600000) |
-| `--cli` | No | Force CLI: `codex`, `claude`, `cursor-agent`, `glm`, `grok`, `gemini` |
+| `--cli` | No | Force CLI: `codex`, `claude`, `cursor-agent`, `glm`, `grok`, `gemini`, `opencode` |
 
 *Required when not using --list
 
@@ -350,6 +374,10 @@ Set `CLI_API_KEY` to your Z.ai token — an unset key returns a configuration er
 **Gemini CLI:**
 Set `GEMINI_API_KEY` in the environment — without it the `gemini` backend won't run (Google is retiring the free OAuth tier on June 18, 2026).
 
+**OpenCode:**
+Install OpenCode and configure a provider and default model. Run `opencode models`
+and a direct `opencode run --format json` smoke test before using the backend.
+
 ### Agent not found
 
 Check that:
@@ -365,6 +393,7 @@ Install the required CLI:
 - Cursor CLI: `curl https://cursor.com/install -fsS | bash`
 - Grok Build: `curl -fsSL https://x.ai/cli/install.sh | bash`
 - Gemini CLI: `npm install -g @google/gemini-cli`
+- OpenCode: `brew install anomalyco/tap/opencode`
 
 ### Other execution errors
 

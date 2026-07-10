@@ -6,9 +6,9 @@ import os
 
 from _constants import SUPPORTED_CLIS
 
-# glm is a valid frontmatter target (it runs the claude binary against a GLM
-# endpoint) but never a *caller* — you don't run "inside glm" — so it is absent
-# from detect_caller_cli below.
+# Some supported targets (notably glm) are not caller environments. OpenCode has
+# no stable caller environment variable, so it is detected only by the Linux
+# parent-process fallback below.
 _VALID_CLIS = SUPPORTED_CLIS
 
 
@@ -46,6 +46,8 @@ def detect_caller_cli() -> str | None:
                     return "gemini"
                 if "grok" in cmdline:
                     return "grok"
+                if "opencode" in cmdline:
+                    return "opencode"
     except (FileNotFoundError, PermissionError, OSError):
         # /proc absent on macOS, may be unreadable under sandbox. Caller
         # detection is best-effort — fall through silently.

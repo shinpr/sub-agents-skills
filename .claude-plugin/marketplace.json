@@ -4,13 +4,13 @@
     "name": "Shinsuke Kagawa",
     "url": "https://github.com/shinpr"
   },
-  "description": "Sub-agent runner skill for Codex, Claude Code, Cursor CLI, GLM (Z.ai), Grok Build, and Gemini CLI.",
+  "description": "Sub-agent runner skill for Codex, Claude Code, Cursor CLI, GLM (Z.ai), Grok Build, Gemini CLI, and OpenCode.",
   "plugins": [
     {
       "name": "runner",
       "source": "./",
-      "description": "Runner that executes agent definitions as sub-agents on Codex, Claude Code, Cursor CLI, GLM (Z.ai), Grok Build, or Gemini CLI.",
-      "version": "0.6.1",
+      "description": "Runner that executes agent definitions as sub-agents on Codex, Claude Code, Cursor CLI, GLM (Z.ai), Grok Build, Gemini CLI, or OpenCode.",
+      "version": "0.7.0",
       "author": {
         "name": "Shinsuke Kagawa",
         "url": "https://github.com/shinpr"
@@ -22,7 +22,8 @@
         "orchestration",
         "multi-llm",
         "glm",
-        "grok"
+        "grok",
+        "opencode"
       ]
     }
   ]

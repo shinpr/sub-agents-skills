@@ -6,7 +6,7 @@ allowed-tools: Bash Read
 
 # Sub-Agents - External CLI AI Task Delegation
 
-Spawns external CLI AIs (codex, claude, cursor-agent, glm, grok, gemini) as isolated sub-agents with dedicated context.
+Spawns external CLI AIs (codex, claude, cursor-agent, glm, grok, gemini, opencode) as isolated sub-agents with dedicated context.
 
 ## Resources
 
@@ -123,7 +123,7 @@ The same call keeps failing until the configuration is corrected.
 | `--prompt` | Yes* | Task description to delegate |
 | `--cwd` | Yes* | Working directory (absolute path) |
 | `--timeout` | No | Timeout ms (default: 600000) |
-| `--cli` | No | Force CLI: `codex`, `claude`, `cursor-agent`, `glm`, `grok`, `gemini` |
+| `--cli` | No | Force CLI: `codex`, `claude`, `cursor-agent`, `glm`, `grok`, `gemini`, `opencode` |
 
 *Required when not using --list
 
@@ -163,7 +163,7 @@ How results should be structured.
 
 | Field | Values | Description |
 |-------|--------|-------------|
-| `run-agent` | `codex`, `claude`, `cursor-agent`, `glm`, `grok`, `gemini` | Which CLI executes this agent |
+| `run-agent` | `codex`, `claude`, `cursor-agent`, `glm`, `grok`, `gemini`, `opencode` | Which CLI executes this agent |
 | `permission` | `read-only`, `safe-edit` (default), `yolo` | Approval/sandbox level the sub-agent runs with |
 
 `permission` levels (mapped per-CLI by the skill):

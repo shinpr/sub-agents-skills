@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from unittest.mock import patch
 
@@ -87,6 +88,11 @@ class TestBuildCommand:
         cmd, args = build_command("glm", "test prompt")
         assert cmd == "claude"
         assert args == ["--output-format", "stream-json", "--verbose", "-p", "test prompt"]
+
+    def test_opencode_returns_json_run_command(self):
+        cmd, args = build_command("opencode", "test prompt")
+        assert cmd == "opencode"
+        assert args == ["run", "--format", "json", "--auto", "test prompt"]
 
     def test_unknown_cli_raises_error(self):
         with pytest.raises(ValueError, match="Unknown CLI"):
@@ -208,7 +214,9 @@ class TestBuildInvocationArgs:
     def test_glm_strips_inherited_anthropic_api_key(self):
         # Even when the parent process has a real ANTHROPIC_API_KEY, the glm
         # override marks it for removal (None) so it never reaches Z.ai.
-        with patch.dict("os.environ", {"CLI_API_KEY": "zai-secret", "ANTHROPIC_API_KEY": "sk-ant-real"}):
+        with patch.dict(
+            "os.environ", {"CLI_API_KEY": "zai-secret", "ANTHROPIC_API_KEY": "sk-ant-real"}
+        ):
             _, _, env = build_invocation_args(_inv("glm"))
         assert env["ANTHROPIC_API_KEY"] is None
         assert env["ANTHROPIC_AUTH_TOKEN"] == "zai-secret"
@@ -224,6 +232,41 @@ class TestBuildInvocationArgs:
         with patch.dict("os.environ", {"CLI_API_KEY": "   "}):
             with pytest.raises(ValueError, match="CLI_API_KEY"):
                 build_invocation_args(_inv("glm"))
+
+    @pytest.mark.parametrize(
+        ("permission", "expected"),
+        [
+            (
+                "read-only",
+                {
+                    "edit": "deny",
+                    "bash": "deny",
+                    "task": "deny",
+                    "external_directory": "deny",
+                    "question": "deny",
+                },
+            ),
+            (
+                "safe-edit",
+                {
+                    "edit": "allow",
+                    "bash": "allow",
+                    "task": "deny",
+                    "external_directory": "deny",
+                    "question": "deny",
+                },
+            ),
+            ("yolo", "allow"),
+        ],
+    )
+    def test_opencode_uses_configured_model_and_permission_env(self, permission, expected):
+        cmd, args, env = build_invocation_args(_inv("opencode", permission=permission))
+        assert cmd == "opencode"
+        assert args[:4] == ["run", "--format", "json", "--auto"]
+        assert "--model" not in args
+        assert "[System Context]" in args[-1]
+        assert "Agent definition" in args[-1]
+        assert json.loads(env["OPENCODE_PERMISSION"]) == expected
 
     def test_unknown_cli_raises(self):
         with pytest.raises(ValueError, match="Unknown CLI"):
@@ -270,6 +313,11 @@ class TestPermissionFlags:
         assert permission_flags("grok", "read-only") == ["--permission-mode", "dontAsk"]
         assert permission_flags("grok", "safe-edit") == ["--permission-mode", "auto"]
         assert permission_flags("grok", "yolo") == ["--permission-mode", "bypassPermissions"]
+
+    def test_opencode_permissions_are_environment_only(self):
+        assert permission_flags("opencode", "read-only") == []
+        assert permission_flags("opencode", "safe-edit") == []
+        assert permission_flags("opencode", "yolo") == []
 
     def test_unknown_cli_raises(self):
         """Unknown CLI in permission mapping is a programmer error — fail fast."""

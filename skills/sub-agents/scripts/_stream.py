@@ -45,14 +45,17 @@ class StreamProcessor:
     - Gemini stream: ``init`` then assistant ``message`` lines, ending with ``result``
     - Codex stream: ``thread.started`` then ``item.completed`` lines, ending with ``turn.completed``
     - Grok json: a complete ``{"text": ..., "stopReason": ...}`` payload
+    - OpenCode stream: ``step_start`` / ``tool_use`` / ``text`` / ``step_finish``
     """
 
     def __init__(self):
         self.result_json = None
         self.gemini_parts = []
         self.codex_messages = []
+        self.opencode_parts = []
         self.is_gemini = False
         self.is_codex = False
+        self.is_opencode = False
 
     def process_line(self, line: str) -> bool:
         """Process one line. Returns True when a terminal event is reached."""
@@ -72,6 +75,30 @@ class StreamProcessor:
         if data.get("type") == "thread.started":
             self.is_codex = True
             return False
+
+        part = data.get("part")
+        if data.get("type") in {"step_start", "tool_use", "text", "step_finish"} and isinstance(
+            part, dict
+        ):
+            self.is_opencode = True
+
+        if self.is_opencode and data.get("type") == "text":
+            text = part.get("text")
+            if isinstance(text, str):
+                self.opencode_parts.append(text)
+            return False
+
+        if self.is_opencode and data.get("type") == "step_finish":
+            reason = part.get("reason")
+            if reason == "tool-calls" or reason is None:
+                return False
+            self.result_json = {
+                "type": "result",
+                "result": "".join(self.opencode_parts),
+                "status": "success" if reason == "stop" else "partial",
+                "stop_reason": reason,
+            }
+            return True
 
         if self.is_gemini and data.get("type") == "message" and data.get("role") == "assistant":
             content = data.get("content", "")
