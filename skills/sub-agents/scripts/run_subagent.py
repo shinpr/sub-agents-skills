@@ -5,8 +5,6 @@ Usage:
     scripts/run_subagent.py --agent <name> --prompt "<task>" --cwd <path>
     scripts/run_subagent.py --list
 
-Supported CLIs: codex, claude, cursor-agent, glm, grok, gemini.
-
 Environment:
     SUB_AGENTS_DIR: Override default agents directory ({cwd}/.agents/).
     CLI_API_KEY:    Forwarded as CURSOR_API_KEY to cursor-agent, and as
@@ -33,6 +31,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from _builder import AgentInvocation  # noqa: E402
+from _constants import DEFAULT_TIMEOUT_MS, SUPPORTED_CLIS_HELP  # noqa: E402
 from _executor import execute_agent  # noqa: E402
 from _loader import get_agents_dir, list_agents, load_agent  # noqa: E402
 from _resolver import resolve_cli  # noqa: E402
@@ -53,10 +52,13 @@ def main() -> None:
     parser.add_argument("--cwd", help="Working directory (absolute path)")
     parser.add_argument("--agents-dir", help="Directory containing agent definitions")
     parser.add_argument(
-        "--timeout", type=int, default=600000, help="Timeout in ms (default: 600000)"
+        "--timeout",
+        type=int,
+        default=DEFAULT_TIMEOUT_MS,
+        help=f"Timeout in ms (default: {DEFAULT_TIMEOUT_MS})",
     )
     parser.add_argument(
-        "--cli", help="Force specific CLI (codex, claude, cursor-agent, glm, grok, gemini)"
+        "--cli", help=f"Force specific CLI ({SUPPORTED_CLIS_HELP})"
     )
 
     args = parser.parse_args()
@@ -104,10 +106,8 @@ def main() -> None:
         permission=permission,
     )
 
-    # Catch ValueError from build_invocation_args / permission_flags / TOML
-    # escaping so unknown --cli values or unsafe agent paths surface as JSON
-    # errors rather than tracebacks. All other CLI-side failures are already
-    # shaped into the response by execute_agent.
+    # Surface configuration errors as JSON instead of tracebacks. CLI-side
+    # failures are already shaped into the response by execute_agent.
     try:
         result = execute_agent(invocation, timeout_ms=args.timeout)
     except ValueError as e:

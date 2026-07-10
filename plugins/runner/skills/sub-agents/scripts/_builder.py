@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
+from _constants import format_concatenated_prompt
 from _loader import DEFAULT_PERMISSION
 
 
@@ -108,7 +109,7 @@ def _concatenated_args(
 
     Used when a CLI lacks a native system-prompt mechanism we can target.
     """
-    formatted_prompt = f"[System Context]\n{inv.system_context}\n\n[User Prompt]\n{inv.prompt}"
+    formatted_prompt = format_concatenated_prompt(inv.system_context, inv.prompt)
     command, base_args = build_command(inv.cli, formatted_prompt)
     return command, perm_flags + base_args, env
 
@@ -135,9 +136,8 @@ def _build_codex_args(inv: AgentInvocation) -> tuple[str, list, dict | None]:
 
 def _build_grok_args(inv: AgentInvocation) -> tuple[str, list, dict | None]:
     perm = permission_flags(inv.cli, inv.permission)
-    command, base_args = build_command(inv.cli, inv.prompt)
-    formatted_prompt = f"[System Context]\n{inv.system_context}\n\n[User Prompt]\n{inv.prompt}"
-    _, base_args = build_command(inv.cli, formatted_prompt)
+    formatted_prompt = format_concatenated_prompt(inv.system_context, inv.prompt)
+    command, base_args = build_command(inv.cli, formatted_prompt)
     return command, perm + ["--cwd", inv.cwd] + base_args, None
 
 
@@ -191,7 +191,8 @@ def _build_glm_args(inv: AgentInvocation) -> tuple[str, list, dict | None]:
 def _build_cursor_args(inv: AgentInvocation) -> tuple[str, list, dict | None]:
     perm = permission_flags(inv.cli, inv.permission)
     # Forward CLI_API_KEY (skill contract) as CURSOR_API_KEY (cursor's native
-    # env). Passing via env keeps the secret out of `ps` output.
+    # env). Passing via env keeps the secret out of `ps` output. Cursor can
+    # also run from its own logged-in state, so a missing key is not an error.
     api_key = os.environ.get("CLI_API_KEY")
     env_override = {"CURSOR_API_KEY": api_key} if api_key else None
     return _concatenated_args(inv, perm, env=env_override)

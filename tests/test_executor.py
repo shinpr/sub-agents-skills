@@ -67,6 +67,18 @@ class TestBuildFinalResponse:
         assert r["status"] == "partial"
         assert r["exit_code"] == 0
 
+    def test_result_marked_partial_stays_partial_when_terminated_by_us(self):
+        r = build_final_response(
+            "grok",
+            1,
+            {"result": "progress", "status": "partial"},
+            [],
+            "",
+            terminated_by_us=True,
+        )
+        assert r["status"] == "partial"
+        assert r["exit_code"] == 1
+
     def test_terminated_by_us_with_result_is_success_regardless_of_exit_code(self):
         # Windows: terminate() maps to TerminateProcess and yields exit code 1,
         # unlike POSIX SIGTERM (143 / -15). When we asked the CLI to stop after a
@@ -156,7 +168,7 @@ class TestExecuteAgent:
         """
         mock_process = MagicMock()
         # ~200 chars per line; cap will be patched below; aim for >cap quickly.
-        flood = ['{"noise": "' + ("x" * 180) + '"}\n'] * 1000 + [""]
+        flood = ['{"type": "noise", "data": "' + ("x" * 180) + '"}\n'] * 1000 + [""]
         mock_process.stdout.readline.side_effect = flood
         mock_process.communicate.return_value = ("", "")
         mock_process.returncode = -9
@@ -171,6 +183,30 @@ class TestExecuteAgent:
         assert result["exit_code"] == 1
         assert "exceeded" in result["error"]
         assert mock_process.kill.called
+
+    def test_stdout_cap_does_not_override_completed_result(self):
+        mock_process = MagicMock()
+        flood = ['{"type": "noise", "data": "' + ("x" * 180) + '"}\n'] * 20
+        mock_process.stdout.readline.side_effect = [
+            '{"type": "thread.started"}\n',
+            '{"type": "item.completed", "item": {"type": "agent_message", "text": "DONE"}}\n',
+            '{"type": "turn.completed"}\n',
+            *flood,
+            "",
+        ]
+        mock_process.communicate.return_value = ("", "")
+        mock_process.returncode = 1
+
+        with patch("subprocess.Popen", return_value=mock_process):
+            with patch("_executor._MAX_STDOUT_CHARS", 1024):
+                result = execute_agent(
+                    AgentInvocation(cli="codex", prompt="x", cwd="/tmp"),
+                    timeout_ms=10000,
+                )
+        assert result["status"] == "success"
+        assert result["result"] == "DONE"
+        assert mock_process.terminate.called
+        assert not mock_process.kill.called
 
     def test_timeout_when_cli_blocks_without_output(self):
         """A CLI that produces no output and never exits must be killed by the deadline.
@@ -320,6 +356,23 @@ class TestExecuteAgent:
             )
         assert result["status"] == "success"
         assert result["result"] == '{"findings":[]}'
+
+    def test_grok_compact_cancelled_output_stays_partial(self):
+        mock_process = MagicMock()
+        mock_process.stdout.readline.side_effect = [
+            '{"text": "progress only", "stopReason": "Cancelled"}\n',
+            "",
+        ]
+        mock_process.communicate.return_value = ("", "")
+        mock_process.returncode = 1
+
+        with patch("subprocess.Popen", return_value=mock_process):
+            result = execute_agent(
+                AgentInvocation(cli="grok", prompt="x", cwd="/tmp"),
+                timeout_ms=5000,
+            )
+        assert result["status"] == "partial"
+        assert result["result"] == "progress only"
 
 
 class TestMainEndToEnd:
