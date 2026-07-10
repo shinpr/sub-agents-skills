@@ -25,6 +25,7 @@ class AgentInvocation:
     system_context: str = ""
     agent_file: str | None = None
     permission: str = DEFAULT_PERMISSION
+    model: str | None = None
 
 
 def build_command(cli: str, prompt: str) -> tuple[str, list]:
@@ -114,6 +115,14 @@ def permission_flags(cli: str, permission: str) -> list:
         raise ValueError(f"No permission mapping for cli={cli!r}, permission={permission!r}") from e
 
 
+def _invocation_flags(inv: AgentInvocation) -> list:
+    """Build flags shared by every backend invocation."""
+    flags = permission_flags(inv.cli, inv.permission)
+    if inv.model:
+        flags.extend(["--model", inv.model])
+    return flags
+
+
 def _concatenated_args(
     inv: AgentInvocation, perm_flags: list, env: dict | None
 ) -> tuple[str, list, dict | None]:
@@ -127,14 +136,14 @@ def _concatenated_args(
 
 
 def _build_claude_args(inv: AgentInvocation) -> tuple[str, list, dict | None]:
-    perm = permission_flags(inv.cli, inv.permission)
+    perm = _invocation_flags(inv)
     system_prompt = f"cwd: {inv.cwd}\n\n{inv.system_context}"
     command, base_args = build_command(inv.cli, inv.prompt)
     return command, perm + ["--append-system-prompt", system_prompt] + base_args, None
 
 
 def _build_gemini_args(inv: AgentInvocation) -> tuple[str, list, dict | None]:
-    perm = permission_flags(inv.cli, inv.permission)
+    perm = _invocation_flags(inv)
     if inv.agent_file:
         command, base_args = build_command(inv.cli, inv.prompt)
         return command, perm + base_args, {"GEMINI_SYSTEM_MD": inv.agent_file}
@@ -142,12 +151,12 @@ def _build_gemini_args(inv: AgentInvocation) -> tuple[str, list, dict | None]:
 
 
 def _build_codex_args(inv: AgentInvocation) -> tuple[str, list, dict | None]:
-    perm = permission_flags(inv.cli, inv.permission)
+    perm = _invocation_flags(inv)
     return _concatenated_args(inv, perm, env=None)
 
 
 def _build_grok_args(inv: AgentInvocation) -> tuple[str, list, dict | None]:
-    perm = permission_flags(inv.cli, inv.permission)
+    perm = _invocation_flags(inv)
     formatted_prompt = format_concatenated_prompt(inv.system_context, inv.prompt)
     command, base_args = build_command(inv.cli, formatted_prompt)
     return command, perm + ["--cwd", inv.cwd] + base_args, None
@@ -173,8 +182,8 @@ _OPENCODE_PERMISSION_MAPPING = {
 
 
 def _build_opencode_args(inv: AgentInvocation) -> tuple[str, list, dict | None]:
-    """Use OpenCode's configured provider/model with non-interactive permissions."""
-    perm = permission_flags(inv.cli, inv.permission)
+    """Use OpenCode with optional model override and non-interactive permissions."""
+    perm = _invocation_flags(inv)
     formatted_prompt = format_concatenated_prompt(inv.system_context, inv.prompt)
     command, base_args = build_command(inv.cli, formatted_prompt)
     env_override = {"OPENCODE_PERMISSION": json.dumps(_OPENCODE_PERMISSION_MAPPING[inv.permission])}
@@ -215,7 +224,7 @@ def _build_glm_args(inv: AgentInvocation) -> tuple[str, list, dict | None]:
             "to their Z.ai token and re-run, then wait for them. The same call "
             "keeps failing until CLI_API_KEY is set, so treat this run as finished."
         )
-    perm = permission_flags(inv.cli, inv.permission)
+    perm = _invocation_flags(inv)
     system_prompt = f"cwd: {inv.cwd}\n\n{inv.system_context}"
     command, base_args = build_command(inv.cli, inv.prompt)
     env_override = {
@@ -229,7 +238,7 @@ def _build_glm_args(inv: AgentInvocation) -> tuple[str, list, dict | None]:
 
 
 def _build_cursor_args(inv: AgentInvocation) -> tuple[str, list, dict | None]:
-    perm = permission_flags(inv.cli, inv.permission)
+    perm = _invocation_flags(inv)
     # Forward CLI_API_KEY (skill contract) as CURSOR_API_KEY (cursor's native
     # env). Passing via env keeps the secret out of `ps` output. Cursor can
     # also run from its own logged-in state, so a missing key is not an error.

@@ -414,10 +414,13 @@ class TestMainEndToEnd:
             agents_dir = Path(tmpdir) / ".agents"
             agents_dir.mkdir()
             (agents_dir / "echo.md").write_text(
-                "---\nrun-agent: codex\npermission: read-only\n---\n# Echo\n\nReply.\n"
+                "---\nrun-agent: codex\nmodel: gpt-5.4-mini\npermission: read-only\n---\n"
+                "# Echo\n\nReply.\n"
             )
 
-            def popen_factory(*_args, **_kwargs):
+            def popen_factory(args, **_kwargs):
+                model_idx = args.index("--model")
+                assert args[model_idx + 1] == "gpt-5.4-mini"
                 m = MagicMock()
                 m.stdout.readline.side_effect = [
                     '{"type": "thread.started"}\n',

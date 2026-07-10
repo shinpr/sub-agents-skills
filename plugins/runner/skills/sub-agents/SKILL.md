@@ -143,6 +143,7 @@ Place `.md` files in `.agents/` directory:
 ```markdown
 ---
 run-agent: claude
+model: sonnet
 permission: safe-edit
 ---
 
@@ -164,6 +165,7 @@ How results should be structured.
 | Field | Values | Description |
 |-------|--------|-------------|
 | `run-agent` | `codex`, `claude`, `cursor-agent`, `glm`, `grok`, `gemini`, `opencode` | Which CLI executes this agent |
+| `model` | Backend-specific model name (optional) | Model passed to the selected CLI; omit to use its configured default |
 | `permission` | `read-only`, `safe-edit` (default), `yolo` | Approval/sandbox level the sub-agent runs with |
 
 `permission` levels (mapped per-CLI by the skill):

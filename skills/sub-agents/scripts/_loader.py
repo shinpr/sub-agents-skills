@@ -64,10 +64,12 @@ def validate_permission(value: str | None) -> str:
     return value
 
 
-def load_agent(agents_dir: str, agent_name: str) -> tuple[str | None, str, str, str, str]:
-    """Load agent definition file and extract run-agent and permission settings.
+def load_agent(
+    agents_dir: str, agent_name: str
+) -> tuple[str | None, str, str, str, str, str | None]:
+    """Load agent definition file and extract invocation settings.
 
-    Returns (run_agent_cli, system_context, description, file_path, permission).
+    Returns (run_agent_cli, system_context, description, file_path, permission, model).
     """
     validate_agent_name(agent_name)
     agents_path = Path(agents_dir)
@@ -86,8 +88,9 @@ def load_agent(agents_dir: str, agent_name: str) -> tuple[str | None, str, str, 
             frontmatter, body = parse_frontmatter(content)
             run_agent = frontmatter.get("run-agent")
             permission = validate_permission(frontmatter.get("permission"))
+            model = frontmatter.get("model") or None
             description = extract_description(body)
-            return run_agent, body.strip(), description, str(resolved), permission
+            return run_agent, body.strip(), description, str(resolved), permission, model
 
     raise FileNotFoundError(f"Agent definition not found: {agent_name}")
 

@@ -102,6 +102,33 @@ class TestBuildCommand:
 class TestBuildInvocationArgs:
     """Per-CLI argument assembly via build_invocation_args."""
 
+    @pytest.mark.parametrize(
+        ("cli", "model"),
+        [
+            ("codex", "gpt-5.4-mini"),
+            ("claude", "sonnet"),
+            ("cursor-agent", "gpt-5"),
+            ("glm", "glm-4.7"),
+            ("grok", "grok-code-fast-1"),
+            ("gemini", "gemini-3-flash-preview"),
+            ("opencode", "test-provider/test-model"),
+        ],
+    )
+    def test_model_is_forwarded_to_every_backend(self, cli, model):
+        env = {"CLI_API_KEY": "test-key"} if cli == "glm" else {}
+        with patch.dict(os.environ, env, clear=cli == "glm"):
+            _, args, _ = build_invocation_args(_inv(cli, model=model))
+        model_idx = args.index("--model")
+        assert args[model_idx + 1] == model
+        assert model_idx < len(args) - 1
+
+    @pytest.mark.parametrize("cli", SUPPORTED_CLIS)
+    def test_model_is_omitted_when_unspecified(self, cli):
+        env = {"CLI_API_KEY": "test-key"} if cli == "glm" else {}
+        with patch.dict(os.environ, env, clear=cli == "glm"):
+            _, args, _ = build_invocation_args(_inv(cli))
+        assert "--model" not in args
+
     def test_claude_uses_append_system_prompt_flag(self):
         cmd, args, env = build_invocation_args(_inv("claude"))
         assert cmd == "claude"
