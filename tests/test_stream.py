@@ -38,10 +38,31 @@ class TestStreamProcessor:
         result = processor.get_result()
         assert result["result"] == "msg1\nmsg2"
 
+    def test_opencode_stream_collects_text_until_stop(self):
+        processor = StreamProcessor()
+        assert not processor.process_line('{"type":"step_start","part":{}}')
+        assert not processor.process_line('{"type":"text","part":{"text":"part1"}}')
+        assert not processor.process_line('{"type":"step_finish","part":{"reason":"tool-calls"}}')
+        assert not processor.process_line('{"type":"step_start","part":{}}')
+        assert not processor.process_line('{"type":"text","part":{"text":"part2"}}')
+        assert processor.process_line('{"type":"step_finish","part":{"reason":"stop"}}')
+        result = processor.get_result()
+        assert result["result"] == "part1part2"
+        assert result["status"] == "success"
+        assert result["stop_reason"] == "stop"
+
+    def test_opencode_non_stop_finish_is_partial(self):
+        processor = StreamProcessor()
+        assert not processor.process_line('{"type":"text","part":{"text":"truncated"}}')
+        assert processor.process_line('{"type":"step_finish","part":{"reason":"length"}}')
+        result = processor.get_result()
+        assert result["result"] == "truncated"
+        assert result["status"] == "partial"
+
     def test_grok_complete_json_output(self):
         processor = StreamProcessor()
         assert processor.process_complete_output(
-            '{\n'
+            "{\n"
             '  "text": "{\\"findings\\":[]}",\n'
             '  "stopReason": "EndTurn",\n'
             '  "sessionId": "s",\n'

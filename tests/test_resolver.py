@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import mock_open, patch
 
 from _resolver import detect_caller_cli, resolve_cli
 
@@ -18,6 +18,9 @@ class TestResolveCli:
 
     def test_grok_frontmatter_is_valid_target(self):
         assert resolve_cli("grok") == "grok"
+
+    def test_opencode_frontmatter_is_valid_target(self):
+        assert resolve_cli("opencode") == "opencode"
 
     def test_default_fallback(self):
         # No frontmatter and no caller env -> default
@@ -43,6 +46,15 @@ class TestDetectCallerCli:
     def test_detects_grok_from_env(self):
         with patch.dict("os.environ", {"GROK_CLI": "1"}, clear=True):
             assert detect_caller_cli() == "grok"
+
+    def test_detects_opencode_from_parent_process(self):
+        with patch.dict("os.environ", {}, clear=True):
+            with patch("os.path.exists", return_value=True):
+                with patch(
+                    "builtins.open",
+                    mock_open(read_data="/opt/homebrew/bin/opencode\0run"),
+                ):
+                    assert detect_caller_cli() == "opencode"
 
     def test_returns_none_when_no_indicator(self):
         """No env indicator and /proc absent — must return None deterministically."""

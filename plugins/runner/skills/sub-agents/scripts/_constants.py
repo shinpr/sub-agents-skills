@@ -3,7 +3,15 @@
 from __future__ import annotations
 
 DEFAULT_TIMEOUT_MS = 600000
-SUPPORTED_CLIS = ("codex", "claude", "cursor-agent", "glm", "grok", "gemini")
+SUPPORTED_CLIS = (
+    "codex",
+    "claude",
+    "cursor-agent",
+    "glm",
+    "grok",
+    "gemini",
+    "opencode",
+)
 SUPPORTED_CLIS_HELP = ", ".join(SUPPORTED_CLIS)
 
 

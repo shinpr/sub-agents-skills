@@ -7,6 +7,7 @@ permission-level mapping, system-prompt injection mechanism. The dispatcher
 
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass
 
@@ -54,6 +55,9 @@ def build_command(cli: str, prompt: str) -> tuple[str, list]:
             prompt,
         ]
 
+    if cli == "opencode":
+        return "opencode", ["run", "--format", "json", "--auto", prompt]
+
     if cli == "cursor-agent":
         # API key is forwarded via CURSOR_API_KEY env (in build_invocation_args),
         # never via argv — argv would expose the secret in `ps` output.
@@ -87,6 +91,14 @@ _PERMISSION_MAPPING = {
         "read-only": ["--permission-mode", "dontAsk"],
         "safe-edit": ["--permission-mode", "auto"],
         "yolo": ["--permission-mode", "bypassPermissions"],
+    },
+    # OpenCode permissions are supplied through OPENCODE_PERMISSION in
+    # _build_opencode_args; empty argv mappings keep the shared validation and
+    # configuration-sync checks intact.
+    "opencode": {
+        "read-only": [],
+        "safe-edit": [],
+        "yolo": [],
     },
 }
 
@@ -139,6 +151,34 @@ def _build_grok_args(inv: AgentInvocation) -> tuple[str, list, dict | None]:
     formatted_prompt = format_concatenated_prompt(inv.system_context, inv.prompt)
     command, base_args = build_command(inv.cli, formatted_prompt)
     return command, perm + ["--cwd", inv.cwd] + base_args, None
+
+
+_OPENCODE_PERMISSION_MAPPING = {
+    "read-only": {
+        "edit": "deny",
+        "bash": "deny",
+        "task": "deny",
+        "external_directory": "deny",
+        "question": "deny",
+    },
+    "safe-edit": {
+        "edit": "allow",
+        "bash": "allow",
+        "task": "deny",
+        "external_directory": "deny",
+        "question": "deny",
+    },
+    "yolo": "allow",
+}
+
+
+def _build_opencode_args(inv: AgentInvocation) -> tuple[str, list, dict | None]:
+    """Use OpenCode's configured provider/model with non-interactive permissions."""
+    perm = permission_flags(inv.cli, inv.permission)
+    formatted_prompt = format_concatenated_prompt(inv.system_context, inv.prompt)
+    command, base_args = build_command(inv.cli, formatted_prompt)
+    env_override = {"OPENCODE_PERMISSION": json.dumps(_OPENCODE_PERMISSION_MAPPING[inv.permission])}
+    return command, perm + base_args, env_override
 
 
 # GLM's Anthropic-compatible endpoint (Z.ai). Constant, not user-facing.
@@ -205,6 +245,7 @@ _BUILDERS = {
     "cursor-agent": _build_cursor_args,
     "glm": _build_glm_args,
     "grok": _build_grok_args,
+    "opencode": _build_opencode_args,
 }
 
 

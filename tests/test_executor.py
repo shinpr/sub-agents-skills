@@ -374,6 +374,28 @@ class TestExecuteAgent:
         assert result["status"] == "partial"
         assert result["result"] == "progress only"
 
+    def test_opencode_ndjson_output_is_parsed(self):
+        mock_process = MagicMock()
+        mock_process.stdout.readline.side_effect = [
+            '{"type":"step_start","part":{}}\n',
+            '{"type":"tool_use","part":{"tool":"read"}}\n',
+            '{"type":"step_finish","part":{"reason":"tool-calls"}}\n',
+            '{"type":"step_start","part":{}}\n',
+            '{"type":"text","part":{"text":"DONE"}}\n',
+            '{"type":"step_finish","part":{"reason":"stop"}}\n',
+            "",
+        ]
+        mock_process.communicate.return_value = ("", "")
+        mock_process.returncode = 0
+
+        with patch("subprocess.Popen", return_value=mock_process):
+            result = execute_agent(
+                AgentInvocation(cli="opencode", prompt="x", cwd="/tmp"),
+                timeout_ms=5000,
+            )
+        assert result["status"] == "success"
+        assert result["result"] == "DONE"
+
 
 class TestMainEndToEnd:
     """Drive main() end-to-end with subprocess mocked. Verifies the JSON contract."""
