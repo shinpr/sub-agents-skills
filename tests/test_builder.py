@@ -1,4 +1,4 @@
-"""Tests for _builder: per-CLI command construction, permission mapping, TOML escape."""
+"""Tests for _builder: per-CLI command construction and permission mapping."""
 
 from __future__ import annotations
 
@@ -7,11 +7,14 @@ from unittest.mock import patch
 
 import pytest
 from _builder import (
+    _BUILDERS,
+    _PERMISSION_MAPPING,
     AgentInvocation,
     build_command,
     build_invocation_args,
     permission_flags,
 )
+from _constants import SUPPORTED_CLIS
 
 
 def _inv(cli, **kw):
@@ -26,6 +29,10 @@ def _inv(cli, **kw):
 
 
 class TestBuildCommand:
+    def test_supported_cli_configuration_is_in_sync(self):
+        assert set(_BUILDERS) == set(SUPPORTED_CLIS)
+        assert set(_PERMISSION_MAPPING) == set(SUPPORTED_CLIS)
+
     def test_codex_returns_exec_command_with_json_flag(self):
         cmd, args = build_command("codex", "test prompt")
         assert cmd == "codex"

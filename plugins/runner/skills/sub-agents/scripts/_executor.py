@@ -9,6 +9,7 @@ import threading
 import time
 
 from _builder import AgentInvocation, build_invocation_args
+from _constants import DEFAULT_TIMEOUT_MS
 from _stream import StreamProcessor
 
 _SUCCESS_EXIT_CODES = (0, 143, -15)  # 0 ok, 143/-15 = SIGTERM (we asked it to stop)
@@ -57,7 +58,7 @@ def build_final_response(
     """
     exit_code = returncode if returncode is not None else 1
 
-    if result and result.get("status") == "partial" and not terminated_by_us:
+    if result and result.get("status") == "partial":
         status = "partial"
     elif result and (terminated_by_us or exit_code in _SUCCESS_EXIT_CODES):
         status = "success"
@@ -175,7 +176,7 @@ def _drive_process(process: subprocess.Popen, cli: str, timeout_ms: int) -> dict
                 break
             stdout_lines.append(line)
             accumulated_chars += len(line)
-            if accumulated_chars > _MAX_STDOUT_CHARS:
+            if not saw_terminal and accumulated_chars > _MAX_STDOUT_CHARS:
                 # Defensive cap: a sub-agent emitting unbounded non-terminal
                 # output would otherwise grow stdout_lines until the wall-clock
                 # deadline (default 10 min). Kill it and report partial.
@@ -281,7 +282,7 @@ def _spawn_and_drive(
     return _drive_process(process, cli, timeout_ms)
 
 
-def execute_agent(inv: AgentInvocation, timeout_ms: int = 600000) -> dict:
+def execute_agent(inv: AgentInvocation, timeout_ms: int = DEFAULT_TIMEOUT_MS) -> dict:
     """Execute agent CLI for the given invocation. Returns a response dict.
 
     Response shape: ``{result, exit_code, status, cli, error?}``.

@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import os
 
+from _constants import SUPPORTED_CLIS
+
 # glm is a valid frontmatter target (it runs the claude binary against a GLM
 # endpoint) but never a *caller* — you don't run "inside glm" — so it is absent
 # from detect_caller_cli below.
-_VALID_CLIS = ("codex", "claude", "cursor-agent", "glm", "grok", "gemini")
+_VALID_CLIS = SUPPORTED_CLIS
 
 
 def detect_caller_cli() -> str | None:
@@ -32,7 +34,7 @@ def detect_caller_cli() -> str | None:
         ppid = os.getppid()
         cmdline_path = f"/proc/{ppid}/cmdline"
         if os.path.exists(cmdline_path):
-            with open(cmdline_path) as f:
+            with open(cmdline_path, encoding="utf-8", errors="replace") as f:
                 cmdline = f.read().lower()
                 if "claude" in cmdline:
                     return "claude"
