@@ -397,6 +397,109 @@ class TestExecuteAgent:
         assert result["result"] == "DONE"
 
 
+class TestOpencodeDataDirIsolation:
+    """Each OpenCode invocation gets a private XDG data/state home.
+
+    OpenCode keeps all sessions in one shared SQLite DB; concurrent runs race
+    on it and fail with "database is locked". The executor isolates the data
+    dir per invocation and cleans it up once the process finishes.
+    """
+
+    def _mock_process(self):
+        m = MagicMock()
+        m.stdout.readline.side_effect = [
+            '{"type":"text","part":{"text":"DONE"}}\n',
+            '{"type":"step_finish","part":{"reason":"stop"}}\n',
+            "",
+        ]
+        m.communicate.return_value = ("", "")
+        m.returncode = 0
+        return m
+
+    def _run_capturing_env(self, popen_side_effect):
+        captured = {}
+
+        def popen_factory(cmd, **kwargs):
+            captured["env"] = kwargs["env"]
+            return popen_side_effect()
+
+        with patch("subprocess.Popen", side_effect=popen_factory):
+            result = execute_agent(
+                AgentInvocation(cli="opencode", prompt="x", cwd="/tmp"),
+                timeout_ms=5000,
+            )
+        return result, captured["env"]
+
+    def test_private_xdg_dirs_and_permission_env_survive_the_merge(self):
+        result, env = self._run_capturing_env(self._mock_process)
+
+        assert result["status"] == "success"
+        assert "OPENCODE_PERMISSION" in env  # builder's env_override is preserved
+        data_home, state_home = env["XDG_DATA_HOME"], env["XDG_STATE_HOME"]
+        assert data_home != state_home
+        # Both live inside one per-invocation temp dir, not the user's homes.
+        temp_dir = os.path.dirname(data_home)
+        assert temp_dir == os.path.dirname(state_home)
+        assert os.path.basename(temp_dir).startswith("subagent-opencode-")
+
+    def test_temp_dir_is_removed_after_the_run(self):
+        _, env = self._run_capturing_env(self._mock_process)
+        assert not os.path.exists(os.path.dirname(env["XDG_DATA_HOME"]))
+
+    def test_temp_dir_is_removed_when_spawn_fails(self):
+        def raise_not_found():
+            raise FileNotFoundError()
+
+        result, env = self._run_capturing_env(raise_not_found)
+        assert result["status"] == "error"
+        assert not os.path.exists(os.path.dirname(env["XDG_DATA_HOME"]))
+
+    def test_auth_json_is_copied_into_isolated_data_home(self):
+        # auth.json lives in the data home, so `opencode auth login` credentials
+        # must follow the invocation into its private dir. Checked inside the
+        # Popen factory because the temp dir is gone after execute_agent returns.
+        captured = {}
+        with tempfile.TemporaryDirectory() as fake_default:
+            opencode_dir = Path(fake_default) / "opencode"
+            opencode_dir.mkdir(parents=True)
+            (opencode_dir / "auth.json").write_text('{"provider":"key"}')
+
+            def popen_factory(cmd, **kwargs):
+                copied = Path(kwargs["env"]["XDG_DATA_HOME"]) / "opencode" / "auth.json"
+                captured["content"] = copied.read_text() if copied.is_file() else None
+                return self._mock_process()
+
+            with patch.dict("os.environ", {"XDG_DATA_HOME": fake_default}):
+                with patch("subprocess.Popen", side_effect=popen_factory):
+                    execute_agent(
+                        AgentInvocation(cli="opencode", prompt="x", cwd="/tmp"),
+                        timeout_ms=5000,
+                    )
+        assert captured["content"] == '{"provider":"key"}'
+
+    def test_other_clis_are_not_isolated(self):
+        captured = {}
+
+        def popen_factory(cmd, **kwargs):
+            captured["env"] = kwargs["env"]
+            m = MagicMock()
+            m.stdout.readline.side_effect = [
+                '{"type": "item.completed", "item": {"type": "agent_message", "text": "ok"}}\n',
+                '{"type": "turn.completed"}\n',
+                "",
+            ]
+            m.communicate.return_value = ("", "")
+            m.returncode = 0
+            return m
+
+        with patch("subprocess.Popen", side_effect=popen_factory):
+            execute_agent(
+                AgentInvocation(cli="codex", prompt="x", cwd="/tmp"),
+                timeout_ms=5000,
+            )
+        assert captured["env"] is None
+
+
 class TestMainEndToEnd:
     """Drive main() end-to-end with subprocess mocked. Verifies the JSON contract."""
 
