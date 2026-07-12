@@ -266,11 +266,11 @@ If `run-agent` is not specified, the skill auto-detects the caller environment o
 
 **Permission levels:**
 
-- `read-only` — investigation/review only, no edits or shell writes (codex `-s read-only` / claude `--permission-mode plan` / cursor `--mode plan` / grok `--permission-mode dontAsk` / gemini `--approval-mode plan` / OpenCode permission deny rules)
-- `safe-edit` — auto-approve edits inside the workspace, suppress prompts (default; codex `-s workspace-write` + `approval_policy=never` / claude `--permission-mode acceptEdits` / cursor `--trust` / grok `--permission-mode auto` / gemini `--approval-mode auto_edit` / OpenCode `external_directory: deny`)
+- `read-only` — investigation/review only, no edits or shell writes (codex `-s read-only` / claude `--permission-mode plan` / cursor `--mode plan` / grok `--sandbox read-only` / gemini `--approval-mode plan` / OpenCode permission deny rules)
+- `safe-edit` — auto-approve edits inside the workspace, suppress prompts (default; codex `-s workspace-write` + `approval_policy=never` / claude `--permission-mode acceptEdits` / cursor `--trust` / grok `--sandbox workspace` / gemini `--approval-mode auto_edit` / OpenCode `external_directory: deny`)
 - `yolo` — bypass all approvals and sandboxing. Use with care.
 
-Sub-agents have no stdin, so any approval prompt would deadlock the run. The default `safe-edit` keeps normal tool writes confined to the workspace while suppressing prompts. Grok Build runs with `--always-approve`; `permission` still selects Grok's permission mode. OpenCode permission controls are not an OS-level sandbox and cannot confine every side effect of arbitrary programs launched through bash.
+Sub-agents have no stdin, so any approval prompt would deadlock the run. The default `safe-edit` keeps normal tool writes confined to the workspace while suppressing prompts. OpenCode permission controls are not an OS-level sandbox and cannot confine every side effect of arbitrary programs launched through bash.
 
 ### Keep Agents Self-Contained
 
