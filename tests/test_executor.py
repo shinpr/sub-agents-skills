@@ -477,6 +477,24 @@ class TestOpencodeDataDirIsolation:
                     )
         assert captured["content"] == '{"provider":"key"}'
 
+    def test_auth_json_copy_failure_does_not_crash_the_run(self):
+        # The copy is best-effort: env-based provider auth needs no auth.json,
+        # so an unreadable file must not turn into an executor crash.
+        with tempfile.TemporaryDirectory() as fake_default:
+            opencode_dir = Path(fake_default) / "opencode"
+            opencode_dir.mkdir(parents=True)
+            (opencode_dir / "auth.json").write_text('{"provider":"key"}')
+
+            with patch.dict("os.environ", {"XDG_DATA_HOME": fake_default}):
+                with patch("shutil.copy2", side_effect=OSError("permission denied")):
+                    with patch("subprocess.Popen", return_value=self._mock_process()):
+                        result = execute_agent(
+                            AgentInvocation(cli="opencode", prompt="x", cwd="/tmp"),
+                            timeout_ms=5000,
+                        )
+        assert result["status"] == "success"
+        assert result["result"] == "DONE"
+
     def test_other_clis_are_not_isolated(self):
         captured = {}
 

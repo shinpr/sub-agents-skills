@@ -296,7 +296,9 @@ def _isolated_opencode_env(env_override: dict | None, temp_dir: str) -> dict:
 
     ``auth.json`` also lives in the data home, so credentials stored by
     ``opencode auth login`` are copied into the isolated dir; provider keys
-    supplied via environment variables are unaffected.
+    supplied via environment variables are unaffected. The copy is
+    best-effort: a failure only matters for auth-login setups, and those
+    surface it as opencode's own auth error rather than an executor crash.
     """
     data_home = os.path.join(temp_dir, "data")
     state_home = os.path.join(temp_dir, "state")
@@ -307,8 +309,11 @@ def _isolated_opencode_env(env_override: dict | None, temp_dir: str) -> dict:
         "XDG_DATA_HOME", os.path.join(os.path.expanduser("~"), ".local", "share")
     )
     auth_file = os.path.join(default_data_home, "opencode", "auth.json")
-    if os.path.isfile(auth_file):
-        shutil.copy2(auth_file, os.path.join(data_home, "opencode", "auth.json"))
+    try:
+        if os.path.isfile(auth_file):
+            shutil.copy2(auth_file, os.path.join(data_home, "opencode", "auth.json"))
+    except OSError:
+        pass
 
     return {**(env_override or {}), "XDG_DATA_HOME": data_home, "XDG_STATE_HOME": state_home}
 
