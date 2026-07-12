@@ -174,9 +174,6 @@ How results should be structured.
 - `safe-edit` — auto-approve edits in workspace, suppress prompts (default)
 - `yolo` — bypass all approvals and sandboxing
 
-For Grok Build, sub-agent runs pass `--always-approve`; `permission` still
-selects Grok's permission mode.
-
 ## CLI Selection Priority
 
 1. `--cli` argument (explicit override)

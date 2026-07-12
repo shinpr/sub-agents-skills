@@ -1,6 +1,6 @@
 {
   "name": "runner",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "Sub-agent runner — runs agent definitions on Codex, Claude Code, Cursor CLI, GLM (Z.ai), Grok Build, Gemini CLI, or OpenCode from any host AI tool.",
   "author": {
     "name": "Shinsuke Kagawa",

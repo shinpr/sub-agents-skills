@@ -77,7 +77,6 @@ class TestBuildCommand:
         assert args == [
             "--output-format",
             "json",
-            "--always-approve",
             "--verbatim",
             "-p",
             "test prompt",
@@ -337,9 +336,24 @@ class TestPermissionFlags:
         assert permission_flags("cursor-agent", "yolo") == ["-f", "--trust"]
 
     def test_grok_flags(self):
-        assert permission_flags("grok", "read-only") == ["--permission-mode", "dontAsk"]
-        assert permission_flags("grok", "safe-edit") == ["--permission-mode", "auto"]
-        assert permission_flags("grok", "yolo") == ["--permission-mode", "bypassPermissions"]
+        assert permission_flags("grok", "read-only") == [
+            "--permission-mode",
+            "bypassPermissions",
+            "--sandbox",
+            "read-only",
+        ]
+        assert permission_flags("grok", "safe-edit") == [
+            "--permission-mode",
+            "bypassPermissions",
+            "--sandbox",
+            "workspace",
+        ]
+        assert permission_flags("grok", "yolo") == [
+            "--permission-mode",
+            "bypassPermissions",
+            "--sandbox",
+            "off",
+        ]
 
     def test_opencode_permissions_are_environment_only(self):
         assert permission_flags("opencode", "read-only") == []
@@ -425,6 +439,6 @@ class TestPermissionAppliedToCommand:
                 permission="safe-edit",
             )
         )
-        assert "--permission-mode" in args
-        idx = args.index("--permission-mode")
-        assert args[idx + 1] == "auto"
+        assert "--sandbox" in args
+        idx = args.index("--sandbox")
+        assert args[idx + 1] == "workspace"
