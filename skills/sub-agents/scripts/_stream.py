@@ -1,12 +1,9 @@
-"""StreamProcessor: parse newline-delimited JSON output from various CLIs."""
-
 from __future__ import annotations
 
 import json
 
 
 def _extract_trailing_json_object(text: str) -> str:
-    """Return a trailing JSON object from text when one cleanly exists."""
     stripped = text.strip()
     if not stripped:
         return text
@@ -25,7 +22,6 @@ def _extract_trailing_json_object(text: str) -> str:
 
 
 def _grok_json_result(data: dict) -> dict | None:
-    """Normalize Grok ``--output-format json`` output when present."""
     if not isinstance(data.get("text"), str):
         return None
     return {
@@ -38,15 +34,7 @@ def _grok_json_result(data: dict) -> dict | None:
 
 
 class StreamProcessor:
-    """Process streaming JSON output from various CLIs.
-
-    Recognized formats:
-    - Claude / Cursor: a single ``{"type": "result", "result": ...}`` line
-    - Gemini stream: ``init`` then assistant ``message`` lines, ending with ``result``
-    - Codex stream: ``thread.started`` then ``item.completed`` lines, ending with ``turn.completed``
-    - Grok json: a complete ``{"text": ..., "stopReason": ...}`` payload
-    - OpenCode stream: ``step_start`` / ``tool_use`` / ``text`` / ``step_finish``
-    """
+    """Normalize supported CLI streams into a result payload."""
 
     def __init__(self):
         self.result_json = None
@@ -112,7 +100,6 @@ class StreamProcessor:
                 self.codex_messages.append(item["text"])
             return False
 
-        # Codex: turn.completed signals end
         if self.is_codex and data.get("type") == "turn.completed":
             self.result_json = {
                 "type": "result",
@@ -121,7 +108,6 @@ class StreamProcessor:
             }
             return True
 
-        # Result type signals completion
         if data.get("type") == "result":
             if self.is_gemini:
                 self.result_json = {
@@ -133,13 +119,11 @@ class StreamProcessor:
                 self.result_json = data
             return True
 
-        # Top-level ``text`` without a ``type`` is Grok's JSON output shape.
         grok_result = _grok_json_result(data)
         if grok_result is not None:
             self.result_json = grok_result
             return True
 
-        # Fallback: first valid JSON without type field
         if "type" not in data:
             self.result_json = data
             return True

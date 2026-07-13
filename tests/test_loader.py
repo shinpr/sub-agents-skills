@@ -75,7 +75,7 @@ class TestLoadAgentRejectsInvalidNames:
     def test_loads_simple_hyphenated_name(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             agents_dir = self._make_agents_dir(tmpdir)
-            _, context, _, file_path, _, _ = load_agent(agents_dir, "valid-agent")
+            _, context, _, file_path, _, _, _ = load_agent(agents_dir, "valid-agent")
             assert "Valid" in context
             assert file_path.endswith("valid-agent.md")
 
@@ -143,7 +143,7 @@ This is a test agent.
 ## Instructions
 Do something.
 """)
-            run_agent, system_context, desc, file_path, permission, model = load_agent(
+            run_agent, system_context, desc, file_path, permission, model, effort = load_agent(
                 tmpdir, "test-agent"
             )
             assert run_agent == "codex"
@@ -152,6 +152,7 @@ Do something.
             assert file_path.endswith("test-agent.md")
             assert permission == DEFAULT_PERMISSION
             assert model is None
+            assert effort is None
 
     def test_agent_not_found(self):
         with tempfile.TemporaryDirectory() as tmpdir, pytest.raises(FileNotFoundError):
@@ -221,7 +222,7 @@ class TestLoadAgentPermission:
     def test_default_permission_when_omitted(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             (Path(tmpdir) / "a.md").write_text("---\nrun-agent: codex\n---\n# A\n")
-            _, _, _, _, permission, _ = load_agent(tmpdir, "a")
+            _, _, _, _, permission, _, _ = load_agent(tmpdir, "a")
             assert permission == DEFAULT_PERMISSION
 
     def test_explicit_read_only(self):
@@ -229,7 +230,7 @@ class TestLoadAgentPermission:
             (Path(tmpdir) / "a.md").write_text(
                 "---\nrun-agent: codex\npermission: read-only\n---\n# A\n"
             )
-            _, _, _, _, permission, _ = load_agent(tmpdir, "a")
+            _, _, _, _, permission, _, _ = load_agent(tmpdir, "a")
             assert permission == "read-only"
 
     def test_explicit_yolo(self):
@@ -237,7 +238,7 @@ class TestLoadAgentPermission:
             (Path(tmpdir) / "a.md").write_text(
                 "---\nrun-agent: claude\npermission: yolo\n---\n# A\n"
             )
-            _, _, _, _, permission, _ = load_agent(tmpdir, "a")
+            _, _, _, _, permission, _, _ = load_agent(tmpdir, "a")
             assert permission == "yolo"
 
     def test_invalid_permission_raises(self):
@@ -255,12 +256,31 @@ class TestLoadAgentModel:
             (Path(tmpdir) / "a.md").write_text(
                 "---\nrun-agent: opencode\nmodel: test-provider/test-model\n---\n# A\n"
             )
-            _, _, _, _, _, model = load_agent(tmpdir, "a")
+            _, _, _, _, _, model, _ = load_agent(tmpdir, "a")
             assert model == "test-provider/test-model"
 
     @pytest.mark.parametrize("value", ["", "''", '""'])
     def test_empty_model_uses_cli_default(self, value):
         with tempfile.TemporaryDirectory() as tmpdir:
             (Path(tmpdir) / "a.md").write_text(f"---\nrun-agent: codex\nmodel: {value}\n---\n# A\n")
-            _, _, _, _, _, model = load_agent(tmpdir, "a")
+            _, _, _, _, _, model, _ = load_agent(tmpdir, "a")
             assert model is None
+
+
+class TestLoadAgentEffort:
+    def test_effort_when_specified(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            (Path(tmpdir) / "a.md").write_text(
+                "---\nrun-agent: glm\nmodel: glm-5.2\neffort: max\n---\n# A\n"
+            )
+            _, _, _, _, _, _, effort = load_agent(tmpdir, "a")
+            assert effort == "max"
+
+    @pytest.mark.parametrize("value", ["", "''", '""'])
+    def test_empty_effort_is_omitted(self, value):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            (Path(tmpdir) / "a.md").write_text(
+                f"---\nrun-agent: codex\neffort: {value}\n---\n# A\n"
+            )
+            _, _, _, _, _, _, effort = load_agent(tmpdir, "a")
+            assert effort is None

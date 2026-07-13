@@ -1,24 +1,4 @@
 #!/usr/bin/env python3
-"""run_subagent.py - Execute external CLI AIs as sub-agents.
-
-Usage:
-    scripts/run_subagent.py --agent <name> --prompt "<task>" --cwd <path>
-    scripts/run_subagent.py --list
-
-Environment:
-    SUB_AGENTS_DIR: Override default agents directory ({cwd}/.agents/).
-    CLI_API_KEY:    Forwarded as CURSOR_API_KEY to cursor-agent, and as
-                    ANTHROPIC_AUTH_TOKEN to glm (env, never argv). Required
-                    for glm.
-
-Implementation is split into sibling modules:
-    _loader.py   - frontmatter parsing and agent discovery
-    _resolver.py - CLI auto-detection
-    _stream.py   - StreamProcessor (NDJSON parsing)
-    _builder.py  - command/args construction per CLI
-    _executor.py - subprocess driver and response shaping
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -67,27 +47,26 @@ def main() -> None:
         print(json.dumps({"agents": agents, "agents_dir": agents_dir}, ensure_ascii=False))
         sys.exit(0)
 
-    # Validate required args for execution
     if not args.agent:
-        _print_error("--agent is required")
+        _print_error("Missing required argument: --agent.")
         sys.exit(1)
     if not args.prompt:
-        _print_error("--prompt is required")
+        _print_error("Missing required argument: --prompt.")
         sys.exit(1)
     if not args.cwd:
-        _print_error("--cwd is required")
+        _print_error("Missing required argument: --cwd.")
         sys.exit(1)
     if not os.path.isabs(args.cwd):
-        _print_error("cwd must be an absolute path")
+        _print_error(f"Invalid --cwd {args.cwd!r}: expected an absolute path.")
         sys.exit(1)
     if not os.path.isdir(args.cwd):
-        _print_error(f"cwd does not exist: {args.cwd}")
+        _print_error(f"Invalid --cwd {args.cwd!r}: directory does not exist.")
         sys.exit(1)
 
     agents_dir = get_agents_dir(args.agents_dir, args.cwd)
 
     try:
-        run_agent_cli, system_context, _, agent_file, permission, model = load_agent(
+        run_agent_cli, system_context, _, agent_file, permission, model, effort = load_agent(
             agents_dir, args.agent
         )
     except (FileNotFoundError, ValueError) as e:
@@ -103,10 +82,9 @@ def main() -> None:
         agent_file=agent_file,
         permission=permission,
         model=model,
+        effort=effort,
     )
 
-    # Surface configuration errors as JSON instead of tracebacks. CLI-side
-    # failures are already shaped into the response by execute_agent.
     try:
         result = execute_agent(invocation, timeout_ms=args.timeout)
     except ValueError as e:

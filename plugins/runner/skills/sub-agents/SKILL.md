@@ -8,17 +8,14 @@ allowed-tools: Bash Read
 
 Spawns external CLI AIs (codex, claude, cursor-agent, glm, grok, gemini, opencode) as isolated sub-agents with dedicated context.
 
+Workflow: discover available definitions, select one from the user request, execute it, and handle the JSON response.
+
 ## Resources
 
 - **[run_subagent.py](scripts/run_subagent.py)** - Main execution script
-- **[codex.md](references/codex.md)** - Codex-specific setup (permissions, timeout)
+- **[codex.md](references/codex.md)** - Read before first execution from Codex; covers permissions and timeout
 
 **Script Path**: Use absolute path `{SKILL_DIR}/scripts/run_subagent.py` where `{SKILL_DIR}` is the directory containing this SKILL.md file.
-
-## CLI-Specific Notes
-
-Check the corresponding reference for your environment:
-- **Codex**: Read [references/codex.md](references/codex.md) BEFORE first execution
 
 ## Interpreting User Requests
 
@@ -26,15 +23,11 @@ Extract parameters from user's natural language request:
 
 | Parameter | Source |
 |-----------|--------|
-| --agent | Agent name from user request (see selection rules below) |
-| --prompt | Task instruction part (excluding agent specification) |
-| --cwd | Current working directory (absolute path) |
-
-**Agent Selection Rules** (when user doesn't specify agent name):
-1. Run `--list` to get available agents
-2. **0 agents**: Inform user no agents available, show setup instructions (see [Agent Definition Format](#agent-definition-format))
-3. **1 agent**: Auto-select without asking
-4. **2+ agents**: Show list with descriptions, ask user to choose
+| `--agent` | Agent name from the user request or workflow selection |
+| `--prompt` | Task instruction part (excluding agent specification) |
+| `--cwd` | Current working directory (absolute path) |
+| `--cli` | Backend override explicitly requested by the user; otherwise omit |
+| `--timeout` | Timeout explicitly requested by the user, converted to milliseconds; otherwise omit (default: 600000) |
 
 **Example**:
 "Run code-reviewer on src/"
@@ -52,16 +45,12 @@ This script executes external CLIs that require elevated permissions.
 
 ## Workflow
 
-### Step 0: Read CLI-Specific Setup (if applicable)
-
-If you are running on Codex, read [references/codex.md](references/codex.md) first.
-
 ### Step 1: List Available Agents
 
 **Always list agents first** to discover available definitions:
 
 ```bash
-scripts/run_subagent.py --list
+{SKILL_DIR}/scripts/run_subagent.py --list
 ```
 
 Output:
@@ -69,19 +58,30 @@ Output:
 {"agents": [{"name": "code-reviewer", "description": "Reviews code..."}], "agents_dir": "/path/.agents"}
 ```
 
-**If agents list is empty**:
-1. Create `{cwd}/.agents/` directory
-2. Add agent definition file (see [Agent Definition Format](#agent-definition-format))
-3. Re-run `--list` to verify
+When the user provides an agent name, select it if it appears in the result. If
+it is absent, report the available definitions and wait for a selection. When
+the result is empty, provide the Agent Definition Format below and wait for the
+user to add a definition.
+
+When the user leaves the agent selection open:
+
+| Available agents | Action |
+|------------------|--------|
+| 0 | Report that no definitions are available, provide the Agent Definition Format below, and wait |
+| 1 | Select it |
+| 2+ | Show names and descriptions, then ask the user to select one |
 
 ### Step 2: Execute Agent
 
 ```bash
-scripts/run_subagent.py \
+{SKILL_DIR}/scripts/run_subagent.py \
   --agent <name> \
   --prompt "<task>" \
   --cwd <absolute-path>
 ```
+
+Append `--cli <backend>` when the user specifies a backend. Append
+`--timeout <milliseconds>` when the user specifies a timeout.
 
 ### Step 3: Handle Response
 
@@ -97,13 +97,10 @@ Parse JSON output and check `status` field:
 |--------|---------|--------|
 | `success` | Task completed | Use `result` directly |
 | `partial` | Timeout but has output | Review partial `result`, may need retry |
-| `error` | Execution failed | Check `error` field and `exit_code`, fix and retry |
+| `error` | Execution failed | Check `error` and `exit_code`; retry after satisfying the reported requirement |
 
-**Configuration/credential errors persist until fixed.** When the `error` field
-reports a missing or unset requirement (e.g. an environment variable such as
-`CLI_API_KEY`), report it to the user, follow the specific instruction carried
-in the `error` field, and treat the current run as finished pending their fix.
-The same call keeps failing until the configuration is corrected.
+For configuration or credential errors, retry after the required external
+configuration has changed.
 
 **By exit_code** (when status is `error`):
 
@@ -113,19 +110,6 @@ The same call keeps failing until the configuration is corrected.
 | 124 | Timeout | Increase `--timeout` or simplify task |
 | 127 | CLI not found | Install required CLI (claude, codex, etc.) |
 | 1 | General error | Check `error` field in response |
-
-## Parameters
-
-| Parameter | Required | Description |
-|-----------|----------|-------------|
-| `--list` | - | List available agents (no other params needed) |
-| `--agent` | Yes* | Agent definition name from --list |
-| `--prompt` | Yes* | Task description to delegate |
-| `--cwd` | Yes* | Working directory (absolute path) |
-| `--timeout` | No | Timeout ms (default: 600000) |
-| `--cli` | No | Force CLI: `codex`, `claude`, `cursor-agent`, `glm`, `grok`, `gemini`, `opencode` |
-
-*Required when not using --list
 
 ## Agent Definition Location
 
@@ -158,7 +142,7 @@ What this agent does.
 How results should be structured.
 ```
 
-**Critical**: The `run-agent` frontmatter determines which CLI executes the agent.
+`run-agent` supplies the backend; an explicit `--cli` argument overrides it.
 
 **Frontmatter fields:**
 
@@ -166,26 +150,5 @@ How results should be structured.
 |-------|--------|-------------|
 | `run-agent` | `codex`, `claude`, `cursor-agent`, `glm`, `grok`, `gemini`, `opencode` | Which CLI executes this agent |
 | `model` | Backend-specific model name (optional) | Model passed to the selected CLI; omit to use its configured default |
-| `permission` | `read-only`, `safe-edit` (default), `yolo` | Approval/sandbox level the sub-agent runs with |
-
-`permission` levels (mapped per-CLI by the skill):
-
-- `read-only` — investigation only, no edits/writes
-- `safe-edit` — auto-approve edits in workspace, suppress prompts (default)
-- `yolo` — bypass all approvals and sandboxing
-
-## CLI Selection Priority
-
-1. `--cli` argument (explicit override)
-2. Agent definition `run-agent` frontmatter
-3. Auto-detect caller environment
-4. Default: `codex`
-
-## Common Mistakes
-
-| Mistake | Result | Fix |
-|---------|--------|-----|
-| Skip `--list` before execution | Agent not found error | Always run `--list` first |
-| Use relative path for `--cwd` | Validation fails | Use absolute path |
-| Ignore `status` field in response | Undetected errors | Always check `status` before using `result` |
-| Very long prompts | May exceed CLI limits | Break into smaller tasks |
+| `effort` | Backend/model-specific reasoning level or OpenCode variant (optional) | Advanced: forwarded as an opaque value. Confirm support for the selected model before setting; omit to use its default. Unsupported on `cursor-agent` and `gemini` |
+| `permission` | `read-only`, `safe-edit` (default), `yolo` | `read-only` for investigation, `safe-edit` for workspace edits, or `yolo` to bypass approvals and sandboxing |

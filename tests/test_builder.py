@@ -9,10 +9,13 @@ from unittest.mock import patch
 import pytest
 from _builder import (
     _BUILDERS,
+    _EFFORT_SUPPORTED_CLIS,
+    _EFFORT_UNSUPPORTED_CLIS,
     _PERMISSION_MAPPING,
     AgentInvocation,
     build_command,
     build_invocation_args,
+    effort_flags,
     permission_flags,
 )
 from _constants import SUPPORTED_CLIS
@@ -33,6 +36,8 @@ class TestBuildCommand:
     def test_supported_cli_configuration_is_in_sync(self):
         assert set(_BUILDERS) == set(SUPPORTED_CLIS)
         assert set(_PERMISSION_MAPPING) == set(SUPPORTED_CLIS)
+        assert set(SUPPORTED_CLIS) == _EFFORT_SUPPORTED_CLIS | _EFFORT_UNSUPPORTED_CLIS
+        assert _EFFORT_SUPPORTED_CLIS.isdisjoint(_EFFORT_UNSUPPORTED_CLIS)
 
     def test_codex_returns_exec_command_with_json_flag(self):
         cmd, args = build_command("codex", "test prompt")
@@ -94,7 +99,7 @@ class TestBuildCommand:
         assert args == ["run", "--format", "json", "--auto", "test prompt"]
 
     def test_unknown_cli_raises_error(self):
-        with pytest.raises(ValueError, match="Unknown CLI"):
+        with pytest.raises(ValueError, match="Unsupported CLI"):
             build_command("unknown-cli", "test prompt")
 
 
@@ -127,6 +132,43 @@ class TestBuildInvocationArgs:
         with patch.dict(os.environ, env, clear=cli == "glm"):
             _, args, _ = build_invocation_args(_inv(cli))
         assert "--model" not in args
+
+    @pytest.mark.parametrize(
+        ("cli", "effort", "expected_pair"),
+        [
+            ("codex", "xhigh", ("-c", 'model_reasoning_effort="xhigh"')),
+            ("claude", "high", ("--effort", "high")),
+            ("glm", "max", ("--effort", "max")),
+            ("grok", "high", ("--reasoning-effort", "high")),
+            ("opencode", "vendor-level", ("--variant", "vendor-level")),
+        ],
+    )
+    def test_effort_is_forwarded_without_value_validation(self, cli, effort, expected_pair):
+        env = {"CLI_API_KEY": "test-key"} if cli == "glm" else {}
+        with patch.dict(os.environ, env, clear=cli == "glm"):
+            _, args, _ = build_invocation_args(_inv(cli, effort=effort))
+        assert expected_pair in zip(args, args[1:])
+
+    @pytest.mark.parametrize("cli", SUPPORTED_CLIS)
+    def test_effort_is_omitted_when_unspecified(self, cli):
+        env = {"CLI_API_KEY": "test-key"} if cli == "glm" else {}
+        with patch.dict(os.environ, env, clear=cli == "glm"):
+            _, args, _ = build_invocation_args(_inv(cli))
+        assert "--effort" not in args
+        assert "--reasoning-effort" not in args
+        assert "--variant" not in args
+        assert not any(arg.startswith("model_reasoning_effort=") for arg in args)
+
+    @pytest.mark.parametrize("cli", ["cursor-agent", "gemini"])
+    def test_unsupported_effort_fails_instead_of_being_ignored(self, cli):
+        with pytest.raises(ValueError, match=rf"selected backend: '{cli}'"):
+            build_invocation_args(_inv(cli, effort="high"))
+
+    def test_codex_effort_is_safely_encoded_as_toml_string(self):
+        assert effort_flags("codex", 'high" -c unsafe=true') == [
+            "-c",
+            'model_reasoning_effort="high\\" -c unsafe=true"',
+        ]
 
     def test_claude_uses_append_system_prompt_flag(self):
         cmd, args, env = build_invocation_args(_inv("claude"))
@@ -247,17 +289,15 @@ class TestBuildInvocationArgs:
         assert env["ANTHROPIC_API_KEY"] is None
         assert env["ANTHROPIC_AUTH_TOKEN"] == "zai-secret"
 
-    def test_glm_missing_key_raises_config_error(self):
-        env_no_key = {k: v for k, v in os.environ.items() if k != "CLI_API_KEY"}
-        with patch.dict("os.environ", env_no_key, clear=True):
-            with pytest.raises(ValueError, match="CLI_API_KEY"):
+    @pytest.mark.parametrize("env", [{}, {"CLI_API_KEY": "   "}])
+    def test_glm_missing_key_raises_actionable_config_error(self, env):
+        with patch.dict("os.environ", env, clear=True):
+            with pytest.raises(ValueError) as exc_info:
                 build_invocation_args(_inv("glm"))
-
-    def test_glm_blank_key_raises_config_error(self):
-        # Whitespace-only key must be treated as missing, not forwarded to Z.ai.
-        with patch.dict("os.environ", {"CLI_API_KEY": "   "}):
-            with pytest.raises(ValueError, match="CLI_API_KEY"):
-                build_invocation_args(_inv("glm"))
+        assert str(exc_info.value) == (
+            "GLM configuration error: CLI_API_KEY is unset or blank. "
+            "A Z.ai API token is required before retrying."
+        )
 
     @pytest.mark.parametrize(
         ("permission", "expected"),
@@ -295,7 +335,7 @@ class TestBuildInvocationArgs:
         assert json.loads(env["OPENCODE_PERMISSION"]) == expected
 
     def test_unknown_cli_raises(self):
-        with pytest.raises(ValueError, match="Unknown CLI"):
+        with pytest.raises(ValueError, match="Unsupported CLI"):
             build_invocation_args(_inv("totally-fake-cli"))
 
 
