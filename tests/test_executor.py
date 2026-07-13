@@ -245,7 +245,7 @@ class TestExecuteAgent:
         # The whole call must respect the deadline (with reasonable slack).
         assert elapsed < 2.0
         assert result["exit_code"] == 124
-        assert "Timeout" in result["error"]
+        assert "timed out after 300 ms" in result["error"]
 
     def test_popen_uses_explicit_utf8_encoding(self):
         """Subprocess output must be decoded as UTF-8 on every platform.
@@ -566,13 +566,15 @@ class TestMainEndToEnd:
             agents_dir = Path(tmpdir) / ".agents"
             agents_dir.mkdir()
             (agents_dir / "echo.md").write_text(
-                "---\nrun-agent: codex\nmodel: gpt-5.4-mini\npermission: read-only\n---\n"
+                "---\nrun-agent: codex\nmodel: gpt-5.4-mini\neffort: high\n"
+                "permission: read-only\n---\n"
                 "# Echo\n\nReply.\n"
             )
 
             def popen_factory(args, **_kwargs):
                 model_idx = args.index("--model")
                 assert args[model_idx + 1] == "gpt-5.4-mini"
+                assert ("-c", 'model_reasoning_effort="high"') in zip(args, args[1:])
                 m = MagicMock()
                 m.stdout.readline.side_effect = [
                     '{"type": "thread.started"}\n',
@@ -626,6 +628,33 @@ class TestMainEndToEnd:
             assert "Invalid permission" in payload["error"]
             assert exc_info.value.code == 1
 
+    def test_main_unsupported_effort_returns_json_error_before_launch(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            agents_dir = Path(tmpdir) / ".agents"
+            agents_dir.mkdir()
+            (agents_dir / "cursor.md").write_text(
+                "---\nrun-agent: cursor-agent\neffort: high\n---\n# Cursor\n"
+            )
+            argv = [
+                "run_subagent.py",
+                "--agent",
+                "cursor",
+                "--prompt",
+                "x",
+                "--cwd",
+                tmpdir,
+            ]
+            with patch.object(sys, "argv", argv), patch("subprocess.Popen") as popen:
+                buf = StringIO()
+                with patch("sys.stdout", buf), pytest.raises(SystemExit) as exc_info:
+                    main()
+            payload = json.loads(buf.getvalue().strip())
+            assert payload["status"] == "error"
+            assert "selected backend: 'cursor-agent'" in payload["error"]
+            assert payload["cli"] == "cursor-agent"
+            assert exc_info.value.code == 1
+            popen.assert_not_called()
+
     def test_main_invalid_cli_override_returns_json_error(self):
         """--cli with an unknown value must produce a JSON error, not a traceback."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -650,7 +679,7 @@ class TestMainEndToEnd:
                         main()
             payload = json.loads(buf.getvalue().strip())
             assert payload["status"] == "error"
-            assert "Unknown CLI" in payload["error"]
+            assert "Unsupported CLI" in payload["error"]
             assert exc_info.value.code == 1
 
     def test_main_list_returns_agents_json(self):

@@ -1,24 +1,12 @@
-"""CLI resolution: detect calling environment, fall back to default."""
-
 from __future__ import annotations
 
 import os
 
 from _constants import SUPPORTED_CLIS
 
-# Some supported targets (notably glm) are not caller environments. OpenCode has
-# no stable caller environment variable, so it is detected only by the Linux
-# parent-process fallback below.
-_VALID_CLIS = SUPPORTED_CLIS
-
 
 def detect_caller_cli() -> str | None:
-    """Detect which CLI is calling this script (best-effort).
-
-    Checks well-known env vars first, then falls back to a parent-process
-    cmdline probe via /proc (Linux only — macOS lacks /proc and falls
-    through silently).
-    """
+    """Detect the caller from environment variables or Linux ``/proc``."""
     if os.environ.get("CLAUDE_CODE"):
         return "claude"
     if os.environ.get("CURSOR_AGENT"):
@@ -49,20 +37,15 @@ def detect_caller_cli() -> str | None:
                 if "opencode" in cmdline:
                     return "opencode"
     except (FileNotFoundError, PermissionError, OSError):
-        # /proc absent on macOS, may be unreadable under sandbox. Caller
-        # detection is best-effort — fall through silently.
+        # Caller detection is optional.
         pass
 
     return None
 
 
 def resolve_cli(frontmatter_cli: str | None, default: str = "codex") -> str:
-    """Resolve which CLI to use.
-
-    Priority: frontmatter > caller detection > default.
-    Invalid frontmatter values fall through to caller detection (lenient).
-    """
-    if frontmatter_cli and frontmatter_cli in _VALID_CLIS:
+    """Resolve a backend from frontmatter, caller detection, then default."""
+    if frontmatter_cli and frontmatter_cli in SUPPORTED_CLIS:
         return frontmatter_cli
 
     detected = detect_caller_cli()

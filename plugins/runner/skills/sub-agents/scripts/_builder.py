@@ -1,24 +1,15 @@
-"""Per-CLI command argument construction.
-
-Holds the static knowledge of how each backend CLI is invoked: base flags,
-permission-level mapping, system-prompt injection mechanism. The dispatcher
-:func:`build_invocation_args` returns ``(command, args, env_override)``.
-"""
-
 from __future__ import annotations
 
 import json
 import os
 from dataclasses import dataclass
 
-from _constants import format_concatenated_prompt
+from _constants import SUPPORTED_CLIS_HELP, format_concatenated_prompt
 from _loader import DEFAULT_PERMISSION
 
 
 @dataclass(frozen=True)
 class AgentInvocation:
-    """A single sub-agent invocation request."""
-
     cli: str
     prompt: str
     cwd: str
@@ -26,28 +17,22 @@ class AgentInvocation:
     agent_file: str | None = None
     permission: str = DEFAULT_PERMISSION
     model: str | None = None
+    effort: str | None = None
 
 
 def build_command(cli: str, prompt: str) -> tuple[str, list]:
-    """Build the base command + base args (no permission/system-prompt yet)."""
     if cli == "codex":
         return "codex", ["exec", "--json", "--skip-git-repo-check", prompt]
 
     if cli in ("claude", "glm"):
-        # glm runs the *claude* binary pointed at a GLM (Z.ai) Anthropic-compatible
-        # endpoint via env (see _build_glm_args), so it shares claude's argv shape
-        # and stream-json output — no separate parser needed.
+        # GLM uses Claude CLI as its transport.
         return "claude", ["--output-format", "stream-json", "--verbose", "-p", prompt]
 
     if cli == "gemini":
-        # --skip-trust is required for headless runs in untrusted folders;
-        # passing --cwd is itself a trust statement, and Gemini otherwise
-        # downgrades the approval mode to "default" (interactive prompts)
-        # which deadlocks here.
+        # Headless Gemini otherwise prompts for folder trust.
         return "gemini", ["--skip-trust", "--output-format", "stream-json", "-p", prompt]
 
     if cli == "grok":
-        # Approval mode + sandbox live in _PERMISSION_MAPPING["grok"].
         return "grok", [
             "--output-format",
             "json",
@@ -60,11 +45,10 @@ def build_command(cli: str, prompt: str) -> tuple[str, list]:
         return "opencode", ["run", "--format", "json", "--auto", prompt]
 
     if cli == "cursor-agent":
-        # API key is forwarded via CURSOR_API_KEY env (in build_invocation_args),
-        # never via argv — argv would expose the secret in `ps` output.
+        # Cursor credentials stay out of argv.
         return "cursor-agent", ["--output-format", "json", "-p", prompt]
 
-    raise ValueError(f"Unknown CLI: {cli}")
+    raise ValueError(f"Unsupported CLI {cli!r}. Choose one of: {SUPPORTED_CLIS_HELP}.")
 
 
 _PERMISSION_MAPPING = {
@@ -88,16 +72,13 @@ _PERMISSION_MAPPING = {
         "safe-edit": ["--trust"],
         "yolo": ["-f", "--trust"],
     },
-    # Grok's --permission-mode enforces only bypassPermissions via the flag, so
-    # the level is enforced by the kernel --sandbox profile (always explicit).
+    # Grok enforces these levels through sandbox profiles.
     "grok": {
         "read-only": ["--permission-mode", "bypassPermissions", "--sandbox", "read-only"],
         "safe-edit": ["--permission-mode", "bypassPermissions", "--sandbox", "workspace"],
         "yolo": ["--permission-mode", "bypassPermissions", "--sandbox", "off"],
     },
-    # OpenCode permissions are supplied through OPENCODE_PERMISSION in
-    # _build_opencode_args; empty argv mappings keep the shared validation and
-    # configuration-sync checks intact.
+    # OpenCode permissions are supplied through OPENCODE_PERMISSION.
     "opencode": {
         "read-only": [],
         "safe-edit": [],
@@ -105,33 +86,54 @@ _PERMISSION_MAPPING = {
     },
 }
 
-# glm drives the claude binary, so its approval flags are identical to claude's.
 _PERMISSION_MAPPING["glm"] = _PERMISSION_MAPPING["claude"]
 
 
 def permission_flags(cli: str, permission: str) -> list:
-    """Map permission level to CLI-specific flags. Fails fast on unknown values."""
     try:
         return list(_PERMISSION_MAPPING[cli][permission])
     except KeyError as e:
         raise ValueError(f"No permission mapping for cli={cli!r}, permission={permission!r}") from e
 
 
+_EFFORT_SUPPORTED_CLIS = frozenset({"codex", "claude", "glm", "grok", "opencode"})
+_EFFORT_UNSUPPORTED_CLIS = frozenset({"cursor-agent", "gemini"})
+
+
+def effort_flags(cli: str, effort: str | None) -> list:
+    if not effort:
+        return []
+
+    if cli == "codex":
+        # JSON encoding produces a safe TOML string for the config override.
+        encoded_effort = json.dumps(effort, ensure_ascii=False)
+        return ["-c", f"model_reasoning_effort={encoded_effort}"]
+    if cli in ("claude", "glm"):
+        return ["--effort", effort]
+    if cli == "grok":
+        return ["--reasoning-effort", effort]
+    if cli == "opencode":
+        return ["--variant", effort]
+    if cli in _EFFORT_UNSUPPORTED_CLIS:
+        supported = ", ".join(sorted(_EFFORT_SUPPORTED_CLIS))
+        raise ValueError(
+            f"Effort is available for: {supported}; selected backend: {cli!r}. "
+            "Remove effort or select a listed backend."
+        )
+    raise ValueError(f"Unsupported CLI {cli!r}. Choose one of: {SUPPORTED_CLIS_HELP}.")
+
+
 def _invocation_flags(inv: AgentInvocation) -> list:
-    """Build flags shared by every backend invocation."""
     flags = permission_flags(inv.cli, inv.permission)
     if inv.model:
         flags.extend(["--model", inv.model])
+    flags.extend(effort_flags(inv.cli, inv.effort))
     return flags
 
 
 def _concatenated_args(
     inv: AgentInvocation, perm_flags: list, env: dict | None
 ) -> tuple[str, list, dict | None]:
-    """Fallback: concatenate system context into the user prompt argument.
-
-    Used when a CLI lacks a native system-prompt mechanism we can target.
-    """
     formatted_prompt = format_concatenated_prompt(inv.system_context, inv.prompt)
     command, base_args = build_command(inv.cli, formatted_prompt)
     return command, perm_flags + base_args, env
@@ -184,7 +186,6 @@ _OPENCODE_PERMISSION_MAPPING = {
 
 
 def _build_opencode_args(inv: AgentInvocation) -> tuple[str, list, dict | None]:
-    """Use OpenCode with optional model override and non-interactive permissions."""
     perm = _invocation_flags(inv)
     formatted_prompt = format_concatenated_prompt(inv.system_context, inv.prompt)
     command, base_args = build_command(inv.cli, formatted_prompt)
@@ -192,39 +193,16 @@ def _build_opencode_args(inv: AgentInvocation) -> tuple[str, list, dict | None]:
     return command, perm + base_args, env_override
 
 
-# GLM's Anthropic-compatible endpoint (Z.ai). Constant, not user-facing.
 _GLM_BASE_URL = "https://api.z.ai/api/anthropic"
 
 
 def _build_glm_args(inv: AgentInvocation) -> tuple[str, list, dict | None]:
-    """Drive the claude binary against a GLM (Z.ai) endpoint.
-
-    Two deliberate differences from _build_claude_args:
-
-    - ``--system-prompt`` (full replace), not ``--append-system-prompt``: GLM
-      should run on the agent definition alone, not layered on top of Claude
-      Code's harness system prompt (which is tuned for Claude, not GLM).
-    - Env injection routes the claude binary to Z.ai. The secret is delivered
-      via env (never argv, so it stays out of ``ps`` output). An inherited
-      ``ANTHROPIC_API_KEY`` is removed from the child env (mapped to ``None``):
-      if both ``ANTHROPIC_API_KEY`` (x-api-key) and our ``ANTHROPIC_AUTH_TOKEN``
-      (Bearer) reach the claude binary, auth conflicts and the Anthropic key can
-      be sent to Z.ai, producing a 401 — the opaque failure this backend exists
-      to avoid.
-
-    Raises ValueError (surfaced to the orchestrating LLM as a config error) when
-    the Z.ai token is absent or blank — proceeding would only produce an opaque
-    401 from Z.ai buried in the stream, which the caller cannot act on. The
-    message is phrased in positive-imperative form so the orchestrating LLM has
-    a single clear next action (BP-001).
-    """
+    """Route a Claude CLI invocation to Z.ai for GLM."""
     api_key = os.environ.get("CLI_API_KEY")
     if not api_key or not api_key.strip():
         raise ValueError(
-            "GLM backend needs a Z.ai API token in the CLI_API_KEY environment "
-            "variable, which is currently unset. Ask the user to set CLI_API_KEY "
-            "to their Z.ai token and re-run, then wait for them. The same call "
-            "keeps failing until CLI_API_KEY is set, so treat this run as finished."
+            "GLM configuration error: CLI_API_KEY is unset or blank. "
+            "A Z.ai API token is required before retrying."
         )
     perm = _invocation_flags(inv)
     system_prompt = f"cwd: {inv.cwd}\n\n{inv.system_context}"
@@ -232,8 +210,7 @@ def _build_glm_args(inv: AgentInvocation) -> tuple[str, list, dict | None]:
     env_override = {
         "ANTHROPIC_BASE_URL": _GLM_BASE_URL,
         "ANTHROPIC_AUTH_TOKEN": api_key,
-        # None = delete from child env (see _build_proc_env). Strips any
-        # inherited Anthropic key so it cannot be sent to the Z.ai endpoint.
+        # Prevent inherited Anthropic credentials from reaching Z.ai.
         "ANTHROPIC_API_KEY": None,
     }
     return command, perm + ["--system-prompt", system_prompt] + base_args, env_override
@@ -241,9 +218,7 @@ def _build_glm_args(inv: AgentInvocation) -> tuple[str, list, dict | None]:
 
 def _build_cursor_args(inv: AgentInvocation) -> tuple[str, list, dict | None]:
     perm = _invocation_flags(inv)
-    # Forward CLI_API_KEY (skill contract) as CURSOR_API_KEY (cursor's native
-    # env). Passing via env keeps the secret out of `ps` output. Cursor can
-    # also run from its own logged-in state, so a missing key is not an error.
+    # Keep the credential out of argv; logged-in sessions need no override.
     api_key = os.environ.get("CLI_API_KEY")
     env_override = {"CURSOR_API_KEY": api_key} if api_key else None
     return _concatenated_args(inv, perm, env=env_override)
@@ -261,12 +236,10 @@ _BUILDERS = {
 
 
 def build_invocation_args(inv: AgentInvocation) -> tuple[str, list, dict | None]:
-    """Dispatch to the per-CLI argument builder.
-
-    Returns ``(command, args, env_override_or_None)``.
-    """
     try:
         builder = _BUILDERS[inv.cli]
     except KeyError as e:
-        raise ValueError(f"Unknown CLI: {inv.cli}") from e
+        raise ValueError(
+            f"Unsupported CLI {inv.cli!r}. Choose one of: {SUPPORTED_CLIS_HELP}."
+        ) from e
     return builder(inv)

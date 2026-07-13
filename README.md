@@ -75,12 +75,15 @@ Configure the provider, credentials, and default model in
 ---
 run-agent: opencode
 model: provider/model-id
+effort: provider-variant
 permission: safe-edit
 ---
 ```
 
 OpenCode model values use `provider/model` syntax. The runner passes an explicit
 value through `--model`; without one, OpenCode resolves its configured default.
+When `effort` is set, the runner passes it through as OpenCode's model-specific
+`--variant` value.
 
 ## Quick Start
 
@@ -260,9 +263,20 @@ One-sentence purpose.
 |-------|--------|-------------|
 | `run-agent` | `codex`, `claude`, `cursor-agent`, `glm`, `grok`, `gemini`, `opencode` | Which CLI executes this agent |
 | `model` | Backend-specific model name (optional) | Model passed to the selected CLI; omit to use its configured default |
+| `effort` | Backend/model-specific value (optional) | Advanced reasoning-effort override; omit to use the backend/model default |
 | `permission` | `read-only`, `safe-edit` (default), `yolo` | Approval/sandbox level the sub-agent runs with |
 
 If `run-agent` is not specified, the skill auto-detects the caller environment or defaults to `codex`.
+
+`effort` is an advanced option whose accepted values depend on both the backend
+and model. The runner treats the value as opaque and forwards it unchanged to
+Codex as `model_reasoning_effort`, Claude/GLM as `--effort`, Grok as
+`--reasoning-effort`, and OpenCode as `--variant`. Set it when the selected
+model's accepted values are confirmed in the CLI/provider documentation;
+otherwise omit the field and use the backend/model default. Invalid combinations
+fail at runtime. For the current GLM-5.2 target, use `high` or `max`. Cursor and
+Gemini are unsupported for this field; selecting either backend with `effort`
+set returns an error.
 
 **Permission levels:**
 

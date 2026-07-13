@@ -1,5 +1,3 @@
-"""Subprocess driver: spawn the CLI, consume its stream, shape the response."""
-
 from __future__ import annotations
 
 import os
@@ -14,7 +12,8 @@ from _builder import AgentInvocation, build_invocation_args
 from _constants import DEFAULT_TIMEOUT_MS
 from _stream import StreamProcessor
 
-_SUCCESS_EXIT_CODES = (0, 143, -15)  # 0 ok, 143/-15 = SIGTERM (we asked it to stop)
+# SIGTERM may be reported as 143 or -15.
+_SUCCESS_EXIT_CODES = (0, 143, -15)
 
 
 def _partial_response(cli: str, result: dict | None, exit_code: int, error: str) -> dict:
@@ -47,17 +46,7 @@ def build_final_response(
     stderr: str,
     terminated_by_us: bool = False,
 ) -> dict:
-    """Assemble the response dict from process exit state and parsed result.
-
-    ``returncode is None`` means the process has not actually finished — that
-    is treated as a failure (the original ``or 0`` masked this).
-
-    ``terminated_by_us`` records that we called ``terminate()`` after parsing a
-    complete result. The exit code is then irrelevant: POSIX reports SIGTERM as
-    143 / -15, but Windows' TerminateProcess yields 1. Trusting the intent
-    rather than the platform-specific exit code keeps success detection
-    consistent across OSes.
-    """
+    """Build a response, treating intentional termination as success."""
     exit_code = returncode if returncode is not None else 1
 
     if result and result.get("status") == "partial":
@@ -86,23 +75,12 @@ def build_final_response(
 _LINE = "line"
 _EOF = "eof"
 
-# Cap on accumulated stdout codepoints per invocation. Protects the broker
-# from OOM if a sub-agent emits high-rate non-terminal output for the full
-# wall-clock timeout (default 10 minutes). Counted via len(str) since stdout
-# is read in text mode — for ASCII CLI output (the common case) this equals
-# bytes; for non-ASCII content the actual memory pressure can be up to ~4×
-# this number. 64 M codepoints is a safety net far above realistic transcripts.
+# Bound captured output to prevent an unending stream from exhausting memory.
 _MAX_STDOUT_CHARS = 64 * 1024 * 1024
 
 
 def _spawn_reader(process: subprocess.Popen) -> queue.Queue:
-    """Push each stdout line into a queue from a daemon thread.
-
-    Without this, ``readline()`` blocks indefinitely if the CLI hangs without
-    closing stdout — the timeout in :func:`_drive_process` only governs queue
-    waits, so the reader thread could otherwise outlive the parent's timeout
-    deadline. ``daemon=True`` ensures the thread dies with the interpreter.
-    """
+    """Read stdout in a daemon thread so the main loop can enforce timeouts."""
     line_q: queue.Queue = queue.Queue()
 
     def reader() -> None:
@@ -117,16 +95,15 @@ def _spawn_reader(process: subprocess.Popen) -> queue.Queue:
 
 
 def _timeout_payload(cli: str, processor: StreamProcessor, timeout_ms: int) -> dict:
-    return _partial_response(cli, processor.get_result(), 124, f"Timeout after {timeout_ms}ms")
+    error = (
+        f"Sub-agent timed out after {timeout_ms} ms. "
+        "Increase --timeout or simplify the task before retrying."
+    )
+    return _partial_response(cli, processor.get_result(), 124, error)
 
 
 def _drain_to_eof(line_q: queue.Queue, budget_sec: float = 0.5) -> None:
-    """Best-effort: consume the reader queue until _EOF or short budget.
-
-    Used after kill() so that ``communicate()`` reads stderr without racing
-    the reader thread on stdout. Safe to call when the reader is already
-    done — the queue already holds an _EOF sentinel.
-    """
+    """Drain stdout to prevent concurrent reads during ``communicate()``."""
     deadline = time.monotonic() + budget_sec
     while time.monotonic() < deadline:
         try:
@@ -138,18 +115,6 @@ def _drain_to_eof(line_q: queue.Queue, budget_sec: float = 0.5) -> None:
 
 
 def _drive_process(process: subprocess.Popen, cli: str, timeout_ms: int) -> dict:
-    """Read process stdout via StreamProcessor, enforce a wall-clock deadline.
-
-    The wall-clock deadline covers the entire subprocess lifetime — including
-    cases where the CLI never produces stdout, blocks on stderr, or stops
-    emitting lines. A blocking ``readline()`` in the main thread would never
-    reach the timeout check, so reads are delegated to a background thread
-    and observed via a queue.
-
-    After a terminal event is parsed we keep draining the queue until the
-    reader thread reports EOF before calling ``communicate()`` — that way
-    only one consumer ever reads ``process.stdout``.
-    """
     deadline = time.monotonic() + timeout_ms / 1000
     processor = StreamProcessor()
     stdout_lines: list = []
@@ -179,27 +144,21 @@ def _drive_process(process: subprocess.Popen, cli: str, timeout_ms: int) -> dict
             stdout_lines.append(line)
             accumulated_chars += len(line)
             if not saw_terminal and accumulated_chars > _MAX_STDOUT_CHARS:
-                # Defensive cap: a sub-agent emitting unbounded non-terminal
-                # output would otherwise grow stdout_lines until the wall-clock
-                # deadline (default 10 min). Kill it and report partial.
                 process.kill()
                 _drain_to_eof(line_q)
                 process.communicate()
                 return _error_response(
                     cli,
                     1,
-                    f"Sub-agent stdout exceeded {_MAX_STDOUT_CHARS} characters; aborted",
+                    f"Sub-agent output exceeded {_MAX_STDOUT_CHARS} characters. "
+                    "Retry with a narrower task.",
                     partial_result=processor.get_result(),
                 )
             if not saw_terminal and processor.process_line(line):
-                # Processor saw a terminal event; ask the CLI to exit cleanly,
-                # but keep looping so the reader thread can drain stdout to EOF.
                 process.terminate()
                 saw_terminal = True
 
-        # stdout fully drained by reader; communicate() only needs stderr.
-        # Floor at 100ms: even if the deadline expired, give the process a
-        # brief grace window to exit before we escalate to kill().
+        # Allow a short graceful-exit window before killing the process.
         wait_remaining = max(0.1, deadline - time.monotonic())
         try:
             _, stderr = process.communicate(timeout=wait_remaining)
@@ -222,11 +181,8 @@ def _drive_process(process: subprocess.Popen, cli: str, timeout_ms: int) -> dict
             terminated_by_us=saw_terminal,
         )
     except (OSError, ValueError) as e:
-        # OSError covers I/O failures on the pipe; ValueError covers reading
-        # from a closed file. Anything else propagates so it's not silently
-        # swallowed.
         process.kill()
-        # Reap before OpenCode's caller removes its per-run directory.
+        # Reap before callers clean up per-run resources.
         process.wait()
         return _error_response(
             cli, 1, f"{type(e).__name__}: {e}", partial_result=processor.get_result()
@@ -234,12 +190,7 @@ def _drive_process(process: subprocess.Popen, cli: str, timeout_ms: int) -> dict
 
 
 def _build_proc_env(env_override: dict | None) -> dict | None:
-    """Merge ``env_override`` onto ``os.environ`` for the child process.
-
-    A ``None`` value deletes that key from the child env rather than setting it.
-    The glm backend uses this to strip an inherited ``ANTHROPIC_API_KEY`` so it
-    cannot be sent to the Z.ai endpoint and collide with our Bearer token.
-    """
+    """Apply child environment overrides; ``None`` removes a variable."""
     if not env_override:
         return None
     proc_env = {**os.environ}
@@ -260,9 +211,7 @@ def _spawn_and_drive(
     timeout_ms: int,
 ) -> dict:
     try:
-        # stdin=DEVNULL: sub-agent CLIs (notably codex) probe stdin for "additional
-        # input" and block reading from a TTY inherited from the parent. We never
-        # have stdin to give them.
+        # Prevent CLIs from waiting for interactive input.
         process = subprocess.Popen(
             [command, *args],
             cwd=cwd,
@@ -270,16 +219,19 @@ def _spawn_and_drive(
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            # Pin UTF-8 explicitly: text mode otherwise decodes with the locale
-            # codepage (cp932/cp1252 on Windows), garbling the UTF-8 NDJSON the
-            # CLIs emit. errors="replace" degrades malformed bytes gracefully.
+            # CLI streams are UTF-8 regardless of host locale.
             encoding="utf-8",
             errors="replace",
             bufsize=1,
             env=proc_env,
         )
     except FileNotFoundError:
-        return _error_response(cli, 127, f"CLI not found: {command}")
+        return _error_response(
+            cli,
+            127,
+            f"CLI unavailable: {command!r} was not found on PATH. "
+            "Install it or select another backend.",
+        )
     except OSError as e:
         return _error_response(cli, 1, f"{type(e).__name__}: {e}")
 
@@ -287,21 +239,7 @@ def _spawn_and_drive(
 
 
 def _isolated_opencode_env(env_override: dict | None, temp_dir: str) -> dict:
-    """Give this OpenCode invocation a private data/state home.
-
-    Every ``opencode run`` opens one shared SQLite session DB
-    (``$XDG_DATA_HOME/opencode/opencode.db``); concurrent invocations race on
-    it and fail with ``database is locked``. Pointing ``XDG_DATA_HOME`` /
-    ``XDG_STATE_HOME`` at a per-invocation temp dir gives each process its own
-    DB, while config (``~/.config``) and the model cache (``~/.cache``) stay
-    shared. Runs here are one-shot, so the session data is disposable.
-
-    ``auth.json`` also lives in the data home, so credentials stored by
-    ``opencode auth login`` are copied into the isolated dir; provider keys
-    supplied via environment variables are unaffected. The copy is
-    best-effort: a failure only matters for auth-login setups, and those
-    surface it as opencode's own auth error rather than an executor crash.
-    """
+    """Isolate OpenCode state to prevent concurrent SQLite session locks."""
     data_home = os.path.join(temp_dir, "data")
     state_home = os.path.join(temp_dir, "state")
     os.makedirs(os.path.join(data_home, "opencode"))
@@ -315,16 +253,13 @@ def _isolated_opencode_env(env_override: dict | None, temp_dir: str) -> dict:
         if os.path.isfile(auth_file):
             shutil.copy2(auth_file, os.path.join(data_home, "opencode", "auth.json"))
     except OSError:
+        # OpenCode reports authentication failures when this copy was required.
         pass
 
     return {**(env_override or {}), "XDG_DATA_HOME": data_home, "XDG_STATE_HOME": state_home}
 
 
 def execute_agent(inv: AgentInvocation, timeout_ms: int = DEFAULT_TIMEOUT_MS) -> dict:
-    """Execute agent CLI for the given invocation. Returns a response dict.
-
-    Response shape: ``{result, exit_code, status, cli, error?}``.
-    """
     command, args, env_override = build_invocation_args(inv)
 
     if inv.cli == "opencode":
@@ -333,9 +268,7 @@ def execute_agent(inv: AgentInvocation, timeout_ms: int = DEFAULT_TIMEOUT_MS) ->
             proc_env = _build_proc_env(_isolated_opencode_env(env_override, temp_dir))
             return _spawn_and_drive(command, args, proc_env, inv.cwd, inv.cli, timeout_ms)
         finally:
-            # The subprocess has always exited by the time _spawn_and_drive
-            # returns (every timeout/error path kills and reaps it), so
-            # removing the directory cannot race a live process.
+            # _spawn_and_drive reaps the process before returning.
             shutil.rmtree(temp_dir, ignore_errors=True)
 
     proc_env = _build_proc_env(env_override)
