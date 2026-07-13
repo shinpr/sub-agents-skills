@@ -226,6 +226,8 @@ def _drive_process(process: subprocess.Popen, cli: str, timeout_ms: int) -> dict
         # from a closed file. Anything else propagates so it's not silently
         # swallowed.
         process.kill()
+        # Reap before OpenCode's caller removes its per-run directory.
+        process.wait()
         return _error_response(
             cli, 1, f"{type(e).__name__}: {e}", partial_result=processor.get_result()
         )

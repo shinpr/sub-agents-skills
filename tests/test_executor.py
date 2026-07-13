@@ -454,6 +454,37 @@ class TestOpencodeDataDirIsolation:
         assert result["status"] == "error"
         assert not os.path.exists(os.path.dirname(env["XDG_DATA_HOME"]))
 
+    def test_temp_dir_is_removed_after_io_error_once_process_is_reaped(self):
+        captured = {}
+        process = MagicMock()
+        process.stdout.readline.return_value = ""
+        process.returncode = -9
+
+        process.communicate.side_effect = OSError("pipe failure")
+
+        def wait():
+            # The error path must reap the child before execute_agent's finally
+            # block removes the per-invocation directory.
+            assert os.path.isdir(captured["temp_dir"])
+            return -9
+
+        process.wait.side_effect = wait
+
+        def popen_factory(_cmd, **kwargs):
+            captured["temp_dir"] = os.path.dirname(kwargs["env"]["XDG_DATA_HOME"])
+            return process
+
+        with patch("subprocess.Popen", side_effect=popen_factory):
+            result = execute_agent(
+                AgentInvocation(cli="opencode", prompt="x", cwd="/tmp"),
+                timeout_ms=5000,
+            )
+
+        assert result["status"] == "error"
+        assert process.kill.called
+        process.wait.assert_called_once_with()
+        assert not os.path.exists(captured["temp_dir"])
+
     def test_auth_json_is_copied_into_isolated_data_home(self):
         # auth.json lives in the data home, so `opencode auth login` credentials
         # must follow the invocation into its private dir. Checked inside the

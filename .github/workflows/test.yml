@@ -34,6 +34,9 @@ jobs:
       - name: Run lint
         run: ruff check .
 
+      - name: Check formatting
+        run: ruff format --check .
+
       - name: Check plugin sync
         run: python scripts/sync_plugin.py --check
 
