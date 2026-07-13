@@ -40,11 +40,11 @@ def build_command(cli: str, prompt: str) -> tuple[str, list]:
         return "claude", ["--output-format", "stream-json", "--verbose", "-p", prompt]
 
     if cli == "gemini":
-        # --skip-trust is required for headless runs in untrusted folders;
-        # passing --cwd is itself a trust statement, and Gemini otherwise
-        # downgrades the approval mode to "default" (interactive prompts)
-        # which deadlocks here.
-        return "gemini", ["--skip-trust", "--output-format", "stream-json", "-p", prompt]
+        # Headless `-p` mode shows no interactive trust dialog (no TTY), and the
+        # permission mapping passes --approval-mode, which is the trust/approval
+        # signal. Gemini CLI >=0.35 removed the --skip-trust flag and now errors
+        # ("Unknown arguments: skip-trust, skipTrust") if it is passed.
+        return "gemini", ["--output-format", "stream-json", "-p", prompt]
 
     if cli == "grok":
         # Approval mode + sandbox live in _PERMISSION_MAPPING["grok"].

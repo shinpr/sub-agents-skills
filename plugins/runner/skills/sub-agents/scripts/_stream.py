@@ -66,7 +66,21 @@ class StreamProcessor:
         try:
             data = json.loads(line)
         except json.JSONDecodeError:
-            return False
+            # Some CLIs prepend a non-JSON banner to the first event line. Gemini
+            # CLI, for example, emits "MCP issues detected. Run /mcp list for
+            # status." glued onto the `init` JSON when an MCP server is
+            # unreachable. Without recovery the `init` line never parses,
+            # is_gemini stays False, and all assistant text is dropped (empty
+            # result). Recover by parsing from the first brace; a line with no
+            # JSON object (or one whose JSON starts at column 0 yet still failed)
+            # is ignored, as before.
+            brace = line.find("{")
+            if brace <= 0:
+                return False
+            try:
+                data = json.loads(line[brace:])
+            except json.JSONDecodeError:
+                return False
 
         if data.get("type") == "init":
             self.is_gemini = True
