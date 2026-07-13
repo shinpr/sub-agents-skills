@@ -15,9 +15,7 @@ REPO_ROOT = Path(__file__).parent.parent
 
 
 def test_codex_marketplace_uses_non_root_plugin_path():
-    marketplace = json.loads(
-        (REPO_ROOT / ".agents" / "plugins" / "marketplace.json").read_text()
-    )
+    marketplace = json.loads((REPO_ROOT / ".agents" / "plugins" / "marketplace.json").read_text())
 
     [plugin] = marketplace["plugins"]
 
@@ -71,13 +69,7 @@ def test_codex_plugin_skill_copy_matches_canonical_skill():
 
 def test_codex_plugin_default_prompt_uses_namespaced_skill():
     metadata = (
-        REPO_ROOT
-        / "plugins"
-        / "runner"
-        / "skills"
-        / "sub-agents"
-        / "agents"
-        / "openai.yaml"
+        REPO_ROOT / "plugins" / "runner" / "skills" / "sub-agents" / "agents" / "openai.yaml"
     ).read_text()
 
     assert "$runner:sub-agents" in metadata
