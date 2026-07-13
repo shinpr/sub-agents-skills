@@ -47,10 +47,10 @@ def build_command(cli: str, prompt: str) -> tuple[str, list]:
         return "gemini", ["--skip-trust", "--output-format", "stream-json", "-p", prompt]
 
     if cli == "grok":
+        # Approval mode + sandbox live in _PERMISSION_MAPPING["grok"].
         return "grok", [
             "--output-format",
             "json",
-            "--always-approve",
             "--verbatim",
             "-p",
             prompt,
@@ -88,10 +88,12 @@ _PERMISSION_MAPPING = {
         "safe-edit": ["--trust"],
         "yolo": ["-f", "--trust"],
     },
+    # Grok's --permission-mode enforces only bypassPermissions via the flag, so
+    # the level is enforced by the kernel --sandbox profile (always explicit).
     "grok": {
-        "read-only": ["--permission-mode", "dontAsk"],
-        "safe-edit": ["--permission-mode", "auto"],
-        "yolo": ["--permission-mode", "bypassPermissions"],
+        "read-only": ["--permission-mode", "bypassPermissions", "--sandbox", "read-only"],
+        "safe-edit": ["--permission-mode", "bypassPermissions", "--sandbox", "workspace"],
+        "yolo": ["--permission-mode", "bypassPermissions", "--sandbox", "off"],
     },
     # OpenCode permissions are supplied through OPENCODE_PERMISSION in
     # _build_opencode_args; empty argv mappings keep the shared validation and
