@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import os
 import queue
+import shutil
 import subprocess
+import tempfile
 import threading
 import time
 
@@ -282,11 +284,57 @@ def _spawn_and_drive(
     return _drive_process(process, cli, timeout_ms)
 
 
+def _isolated_opencode_env(env_override: dict | None, temp_dir: str) -> dict:
+    """Give this OpenCode invocation a private data/state home.
+
+    Every ``opencode run`` opens one shared SQLite session DB
+    (``$XDG_DATA_HOME/opencode/opencode.db``); concurrent invocations race on
+    it and fail with ``database is locked``. Pointing ``XDG_DATA_HOME`` /
+    ``XDG_STATE_HOME`` at a per-invocation temp dir gives each process its own
+    DB, while config (``~/.config``) and the model cache (``~/.cache``) stay
+    shared. Runs here are one-shot, so the session data is disposable.
+
+    ``auth.json`` also lives in the data home, so credentials stored by
+    ``opencode auth login`` are copied into the isolated dir; provider keys
+    supplied via environment variables are unaffected. The copy is
+    best-effort: a failure only matters for auth-login setups, and those
+    surface it as opencode's own auth error rather than an executor crash.
+    """
+    data_home = os.path.join(temp_dir, "data")
+    state_home = os.path.join(temp_dir, "state")
+    os.makedirs(os.path.join(data_home, "opencode"))
+    os.makedirs(state_home)
+
+    default_data_home = os.environ.get(
+        "XDG_DATA_HOME", os.path.join(os.path.expanduser("~"), ".local", "share")
+    )
+    auth_file = os.path.join(default_data_home, "opencode", "auth.json")
+    try:
+        if os.path.isfile(auth_file):
+            shutil.copy2(auth_file, os.path.join(data_home, "opencode", "auth.json"))
+    except OSError:
+        pass
+
+    return {**(env_override or {}), "XDG_DATA_HOME": data_home, "XDG_STATE_HOME": state_home}
+
+
 def execute_agent(inv: AgentInvocation, timeout_ms: int = DEFAULT_TIMEOUT_MS) -> dict:
     """Execute agent CLI for the given invocation. Returns a response dict.
 
     Response shape: ``{result, exit_code, status, cli, error?}``.
     """
     command, args, env_override = build_invocation_args(inv)
+
+    if inv.cli == "opencode":
+        temp_dir = tempfile.mkdtemp(prefix="subagent-opencode-")
+        try:
+            proc_env = _build_proc_env(_isolated_opencode_env(env_override, temp_dir))
+            return _spawn_and_drive(command, args, proc_env, inv.cwd, inv.cli, timeout_ms)
+        finally:
+            # The subprocess has always exited by the time _spawn_and_drive
+            # returns (every timeout/error path kills and reaps it), so
+            # removing the directory cannot race a live process.
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
     proc_env = _build_proc_env(env_override)
     return _spawn_and_drive(command, args, proc_env, inv.cwd, inv.cli, timeout_ms)
