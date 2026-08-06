@@ -93,6 +93,65 @@ class TestStreamProcessor:
         assert processor.process_line('{"message": "raw"}')
         assert processor.get_result() == {"message": "raw"}
 
+    def test_unrelated_text_field_does_not_match_grok_parser(self):
+        # A claude/glm/kimi system notification (e.g. a Stop hook error) can
+        # carry a string "text" field with no "stopReason". Without the
+        # stopReason guard, this used to be misidentified as a grok result
+        # and short-circuit the real terminal event.
+        processor = StreamProcessor()
+        assert not processor.process_line(
+            '{"type": "system", "subtype": "notification", "key": "stop-hook-error", '
+            '"text": "Stop hook error occurred"}'
+        )
+        assert processor.get_result() is None
+
+    def test_agy_json_line_result(self):
+        processor = StreamProcessor()
+        assert processor.process_line(
+            '{"conversation_id": "c1", "status": "SUCCESS", "response": "OK.\\n"}'
+        )
+        result = processor.get_result()
+        assert result["result"] == "OK.\n"
+        assert result["status"] == "success"
+
+    def test_agy_json_line_non_success_is_partial(self):
+        processor = StreamProcessor()
+        assert processor.process_line(
+            '{"conversation_id": "c1", "status": "CANCELLED", "response": "partial"}'
+        )
+        result = processor.get_result()
+        assert result["status"] == "partial"
+
+    def test_agy_complete_json_output(self):
+        processor = StreamProcessor()
+        assert processor.process_complete_output(
+            '{"conversation_id": "c1", "status": "SUCCESS", "response": "OK."}'
+        )
+        result = processor.get_result()
+        assert result["result"] == "OK."
+
+    def test_kimi_cli_skips_intermediate_tool_call_turn(self):
+        processor = StreamProcessor()
+        assert not processor.process_line(
+            '{"role": "assistant", "tool_calls": [{"type": "function", '
+            '"function": {"name": "Bash", "arguments": "{}"}}]}'
+        )
+        assert not processor.process_line(
+            '{"role": "tool", "tool_call_id": "t1", "content": "file1\\nfile2"}'
+        )
+        assert processor.process_line('{"role": "assistant", "content": "There are 2 files."}')
+        result = processor.get_result()
+        assert result["result"] == "There are 2 files."
+        assert result["status"] == "success"
+
+    def test_kimi_cli_ignores_trailing_meta_line(self):
+        processor = StreamProcessor()
+        assert processor.process_line('{"role": "assistant", "content": "OK."}')
+        assert not processor.process_line(
+            '{"role": "meta", "type": "session.resume_hint", "session_id": "s1"}'
+        )
+        assert processor.get_result()["result"] == "OK."
+
     def test_grok_complete_json_cancelled_is_partial(self):
         processor = StreamProcessor()
         assert processor.process_complete_output(

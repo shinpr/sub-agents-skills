@@ -22,7 +22,11 @@ def _extract_trailing_json_object(text: str) -> str:
 
 
 def _grok_json_result(data: dict) -> dict | None:
-    if not isinstance(data.get("text"), str):
+    # "stopReason" is grok's own completion marker. Without it, an unrelated
+    # JSON line that happens to carry a string "text" field (e.g. another
+    # backend's system notification) would be misidentified as a grok result
+    # and short-circuit the real terminal event.
+    if "stopReason" not in data or not isinstance(data.get("text"), str):
         return None
     return {
         "type": "result",
@@ -30,6 +34,30 @@ def _grok_json_result(data: dict) -> dict | None:
         "status": "success" if data.get("stopReason") == "EndTurn" else "partial",
         "stop_reason": data.get("stopReason"),
         "session_id": data.get("sessionId"),
+    }
+
+
+def _kimi_cli_json_result(data: dict) -> dict | None:
+    # Native Kimi Code CLI --output-format stream-json emits one JSON object
+    # per turn with no "type" field: {"role": "assistant", "tool_calls": [...]}
+    # for intermediate tool-call turns (no "content" key), and
+    # {"role": "assistant", "content": "..."} for the final answer. Requiring
+    # a string "content" skips the intermediate tool-call turns.
+    if data.get("role") != "assistant" or not isinstance(data.get("content"), str):
+        return None
+    return {"type": "result", "result": data["content"], "status": "success"}
+
+
+def _agy_json_result(data: dict) -> dict | None:
+    # agy's --output-format json is a single blob with no "type" field:
+    # {"conversation_id": ..., "status": "SUCCESS", "response": "...", ...}
+    if "conversation_id" not in data or not isinstance(data.get("response"), str):
+        return None
+    return {
+        "type": "result",
+        "result": data["response"],
+        "status": "success" if data.get("status") == "SUCCESS" else "partial",
+        "conversation_id": data.get("conversation_id"),
     }
 
 
@@ -124,6 +152,22 @@ class StreamProcessor:
             self.result_json = grok_result
             return True
 
+        agy_result = _agy_json_result(data)
+        if agy_result is not None:
+            self.result_json = agy_result
+            return True
+
+        kimi_cli_result = _kimi_cli_json_result(data)
+        if kimi_cli_result is not None:
+            self.result_json = kimi_cli_result
+            return True
+
+        if "role" in data:
+            # Belongs to kimi-cli's per-turn shape (assistant tool-call
+            # requests, tool results, trailing meta lines) but wasn't the
+            # final answer above — consume it without treating it as terminal.
+            return False
+
         if "type" not in data:
             self.result_json = data
             return True
@@ -142,10 +186,14 @@ class StreamProcessor:
 
         if isinstance(data, dict):
             grok_result = _grok_json_result(data)
-            if grok_result is None:
-                return False
-            self.result_json = grok_result
-            return True
+            if grok_result is not None:
+                self.result_json = grok_result
+                return True
+            agy_result = _agy_json_result(data)
+            if agy_result is not None:
+                self.result_json = agy_result
+                return True
+            return False
 
         return False
 

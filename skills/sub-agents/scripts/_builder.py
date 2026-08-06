@@ -49,13 +49,13 @@ def build_command(cli: str, prompt: str) -> tuple[str, list]:
         return "cursor-agent", ["--output-format", "json", "-p", prompt]
 
     if cli == "kimi-cli":
-        # Native Kimi Code CLI. --print implicitly enables --afk (auto-approves
-        # everything), so there is no read-only/safe-edit distinction here.
-        return "kimi", ["--print", "--output-format", "stream-json", "-p", prompt]
+        # Native Kimi Code CLI. -p alone triggers non-interactive mode (there
+        # is no separate --print flag; that was the deprecated legacy CLI).
+        return "kimi", ["--output-format", "stream-json", "-p", prompt]
 
     if cli == "agy":
         # Antigravity CLI (Google). Headless mode.
-        return "agy", ["-p", prompt]
+        return "agy", ["--output-format", "json", "-p", prompt]
 
     raise ValueError(f"Unsupported CLI {cli!r}. Choose one of: {SUPPORTED_CLIS_HELP}.")
 
@@ -98,17 +98,18 @@ _PERMISSION_MAPPING = {
 _PERMISSION_MAPPING["glm"] = _PERMISSION_MAPPING["claude"]
 _PERMISSION_MAPPING["kimi"] = _PERMISSION_MAPPING["claude"]
 
-# kimi-cli: --print (see build_command) already forces --afk, so every level
-# runs fully auto-approved. No granular flag exists upstream today.
+# kimi-cli (native Kimi Code CLI): confirmed via `kimi --help` and live
+# testing that --plan, --auto, and --yolo are ALL rejected in combination
+# with -p/--prompt ("Cannot combine --prompt with --auto", etc). Headless
+# mode has no permission flags at all — it runs with full tool access
+# unconditionally, so every level maps to no extra flags.
 _PERMISSION_MAPPING["kimi-cli"] = {
     "read-only": [],
     "safe-edit": [],
     "yolo": [],
 }
 
-# agy (Antigravity CLI): --mode values are UNVERIFIED against `agy --help` —
-# inferred from third-party docs, not the official reference. Confirm before
-# relying on read-only/safe-edit actually restricting anything.
+# agy (Antigravity CLI): confirmed against `agy --help` directly.
 _PERMISSION_MAPPING["agy"] = {
     "read-only": ["--mode", "plan"],
     "safe-edit": ["--mode", "accept-edits"],
@@ -123,8 +124,8 @@ def permission_flags(cli: str, permission: str) -> list:
         raise ValueError(f"No permission mapping for cli={cli!r}, permission={permission!r}") from e
 
 
-_EFFORT_SUPPORTED_CLIS = frozenset({"codex", "claude", "glm", "kimi", "grok", "opencode"})
-_EFFORT_UNSUPPORTED_CLIS = frozenset({"cursor-agent", "gemini", "kimi-cli", "agy"})
+_EFFORT_SUPPORTED_CLIS = frozenset({"codex", "claude", "glm", "kimi", "grok", "opencode", "agy"})
+_EFFORT_UNSUPPORTED_CLIS = frozenset({"cursor-agent", "gemini", "kimi-cli"})
 
 
 def effort_flags(cli: str, effort: str | None) -> list:
@@ -141,6 +142,8 @@ def effort_flags(cli: str, effort: str | None) -> list:
         return ["--reasoning-effort", effort]
     if cli == "opencode":
         return ["--variant", effort]
+    if cli == "agy":
+        return ["--effort", effort]
     if cli in _EFFORT_UNSUPPORTED_CLIS:
         supported = ", ".join(sorted(_EFFORT_SUPPORTED_CLIS))
         raise ValueError(

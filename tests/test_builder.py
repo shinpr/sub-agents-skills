@@ -284,10 +284,13 @@ class TestBuildInvocationArgs:
         assert "cursor-secret" not in args
         assert "legacy-secret" not in args
 
-    def test_kimi_cli_concatenates_prompt_and_forces_print_afk(self):
+    def test_kimi_cli_concatenates_prompt_no_print_flag(self):
+        # There is no --print flag on the native Kimi Code CLI (that was the
+        # deprecated legacy "Kimi CLI"); -p alone triggers non-interactive mode.
         cmd, args, env = build_invocation_args(_inv("kimi-cli"))
         assert cmd == "kimi"
-        assert "--print" in args
+        assert "--print" not in args
+        assert "--output-format" in args
         p_idx = args.index("-p")
         prompt_arg = args[p_idx + 1]
         assert "[System Context]" in prompt_arg
@@ -295,19 +298,33 @@ class TestBuildInvocationArgs:
         assert env is None
 
     def test_kimi_cli_permission_levels_are_all_unrestricted(self):
-        # --print already implies --afk upstream: no granular flag exists yet.
+        # --plan, --auto, and --yolo are all rejected in combination with
+        # -p/--prompt by the CLI itself: no granular flag exists in headless mode.
         assert permission_flags("kimi-cli", "read-only") == []
         assert permission_flags("kimi-cli", "safe-edit") == []
         assert permission_flags("kimi-cli", "yolo") == []
 
-    def test_agy_concatenates_prompt(self):
+    def test_kimi_cli_effort_is_unsupported(self):
+        with pytest.raises(ValueError, match="Effort is available for"):
+            effort_flags("kimi-cli", "high")
+
+    def test_agy_concatenates_prompt_with_json_output_format(self):
         cmd, args, env = build_invocation_args(_inv("agy"))
         assert cmd == "agy"
+        assert "--output-format" in args
+        of_idx = args.index("--output-format")
+        assert args[of_idx + 1] == "json"
         p_idx = args.index("-p")
         prompt_arg = args[p_idx + 1]
         assert "[System Context]" in prompt_arg
         assert "Agent definition" in prompt_arg
         assert env is None
+
+    def test_agy_effort_flag(self):
+        _, args, _ = build_invocation_args(_inv("agy", effort="low"))
+        assert "--effort" in args
+        e_idx = args.index("--effort")
+        assert args[e_idx + 1] == "low"
 
     def test_agy_flags(self):
         assert permission_flags("agy", "read-only") == ["--mode", "plan"]
