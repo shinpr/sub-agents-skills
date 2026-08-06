@@ -6,7 +6,7 @@ allowed-tools: Bash Read
 
 # Sub-Agents - External CLI AI Task Delegation
 
-Spawns external CLI AIs (codex, claude, cursor-agent, glm, kimi, grok, gemini, opencode) as isolated sub-agents with dedicated context.
+Spawns external CLI AIs (codex, claude, cursor-agent, glm, kimi, kimi-cli, grok, gemini, opencode, agy) as isolated sub-agents with dedicated context.
 
 Workflow: discover available definitions, select one from the user request, execute it, and handle the JSON response.
 
@@ -14,6 +14,7 @@ Workflow: discover available definitions, select one from the user request, exec
 
 - **[run_subagent.py](scripts/run_subagent.py)** - Main execution script
 - **[codex.md](references/codex.md)** - Read before first execution from Codex; covers permissions and timeout
+- **[routing.md](references/routing.md)** - Read before selecting an agent automatically when 2+ definitions exist and none was named
 
 **Script Path**: Use absolute path `{SKILL_DIR}/scripts/run_subagent.py` where `{SKILL_DIR}` is the directory containing this SKILL.md file.
 
@@ -69,7 +70,7 @@ When the user leaves the agent selection open:
 |------------------|--------|
 | 0 | Report that no definitions are available, provide the Agent Definition Format below, and wait |
 | 1 | Select it |
-| 2+ | Show names and descriptions, then ask the user to select one |
+| 2+ | Read [routing.md](references/routing.md) and select by matching the task's dominant demand against each agent's description; if genuinely ambiguous between comparably-strong candidates (see routing.md §5), show names and descriptions and ask the user to select one |
 
 ### Step 2: Execute Agent
 
@@ -148,7 +149,7 @@ How results should be structured.
 
 | Field | Values | Description |
 |-------|--------|-------------|
-| `run-agent` | `codex`, `claude`, `cursor-agent`, `glm`, `kimi`, `grok`, `gemini`, `opencode` | Which CLI executes this agent |
+| `run-agent` | `codex`, `claude`, `cursor-agent`, `glm`, `kimi`, `kimi-cli`, `grok`, `gemini`, `opencode`, `agy` | Which CLI executes this agent |
 | `model` | Backend-specific model name (optional) | Model passed to the selected CLI; omit to use its configured default |
 | `effort` | Backend/model-specific reasoning level or OpenCode variant (optional) | Advanced: forwarded as an opaque value. Confirm support for the selected model before setting; omit to use its default. Unsupported on `cursor-agent` and `gemini` |
 | `permission` | `read-only`, `safe-edit` (default), `yolo` | `read-only` for investigation, `safe-edit` for workspace edits, or `yolo` to bypass approvals and sandboxing |
