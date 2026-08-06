@@ -7,9 +7,11 @@ SUPPORTED_CLIS = (
     "cursor-agent",
     "glm",
     "kimi",
+    "kimi-cli",
     "grok",
     "gemini",
     "opencode",
+    "agy",
 )
 SUPPORTED_CLIS_HELP = ", ".join(SUPPORTED_CLIS)
 

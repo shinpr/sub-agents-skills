@@ -284,6 +284,36 @@ class TestBuildInvocationArgs:
         assert "cursor-secret" not in args
         assert "legacy-secret" not in args
 
+    def test_kimi_cli_concatenates_prompt_and_forces_print_afk(self):
+        cmd, args, env = build_invocation_args(_inv("kimi-cli"))
+        assert cmd == "kimi"
+        assert "--print" in args
+        p_idx = args.index("-p")
+        prompt_arg = args[p_idx + 1]
+        assert "[System Context]" in prompt_arg
+        assert "Agent definition" in prompt_arg
+        assert env is None
+
+    def test_kimi_cli_permission_levels_are_all_unrestricted(self):
+        # --print already implies --afk upstream: no granular flag exists yet.
+        assert permission_flags("kimi-cli", "read-only") == []
+        assert permission_flags("kimi-cli", "safe-edit") == []
+        assert permission_flags("kimi-cli", "yolo") == []
+
+    def test_agy_concatenates_prompt(self):
+        cmd, args, env = build_invocation_args(_inv("agy"))
+        assert cmd == "agy"
+        p_idx = args.index("-p")
+        prompt_arg = args[p_idx + 1]
+        assert "[System Context]" in prompt_arg
+        assert "Agent definition" in prompt_arg
+        assert env is None
+
+    def test_agy_flags(self):
+        assert permission_flags("agy", "read-only") == ["--mode", "plan"]
+        assert permission_flags("agy", "safe-edit") == ["--mode", "accept-edits"]
+        assert permission_flags("agy", "yolo") == ["--dangerously-skip-permissions"]
+
     def test_glm_uses_replace_system_prompt_and_injects_zai_env(self):
         with patch.dict("os.environ", {"CLI_API_KEY": "zai-secret"}):
             cmd, args, env = build_invocation_args(_inv("glm"))
