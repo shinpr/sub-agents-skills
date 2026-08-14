@@ -2,12 +2,26 @@ from __future__ import annotations
 
 import os
 import re
+from dataclasses import dataclass
 from pathlib import Path
 
 PERMISSION_VALUES = ("read-only", "safe-edit", "yolo")
 DEFAULT_PERMISSION = "safe-edit"
 
 _AGENT_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$")
+
+
+@dataclass(frozen=True)
+class AgentDefinition:
+    """Parsed agent definition used to construct an invocation."""
+
+    run_agent: str | None
+    system_context: str
+    description: str
+    file_path: str
+    permission: str
+    model: str | None
+    effort: str | None
 
 
 def parse_frontmatter(content: str) -> tuple[dict, str]:
@@ -59,9 +73,7 @@ def validate_permission(value: str | None) -> str:
     return value
 
 
-def load_agent(
-    agents_dir: str, agent_name: str
-) -> tuple[str | None, str, str, str, str, str | None, str | None]:
+def load_agent(agents_dir: str, agent_name: str) -> AgentDefinition:
     validate_agent_name(agent_name)
     agents_path = Path(agents_dir)
     agents_root = agents_path.resolve()
@@ -82,7 +94,15 @@ def load_agent(
             model = frontmatter.get("model") or None
             effort = frontmatter.get("effort") or None
             description = extract_description(body)
-            return run_agent, body.strip(), description, str(resolved), permission, model, effort
+            return AgentDefinition(
+                run_agent=run_agent,
+                system_context=body.strip(),
+                description=description,
+                file_path=str(resolved),
+                permission=permission,
+                model=model,
+                effort=effort,
+            )
 
     raise FileNotFoundError(
         f"Agent definition {agent_name!r} was not found in {str(agents_root)!r}. "

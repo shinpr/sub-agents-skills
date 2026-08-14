@@ -274,16 +274,32 @@ def _isolated_opencode_env(env_override: dict | None, temp_dir: str) -> dict:
 
 
 def execute_agent(inv: AgentInvocation, timeout_ms: int = DEFAULT_TIMEOUT_MS) -> dict:
-    command, args, env_override = build_invocation_args(inv)
+    process_invocation = build_invocation_args(inv)
 
     if inv.cli == "opencode":
         temp_dir = tempfile.mkdtemp(prefix="subagent-opencode-")
         try:
-            proc_env = _build_proc_env(_isolated_opencode_env(env_override, temp_dir))
-            return _spawn_and_drive(command, args, proc_env, inv.cwd, inv.cli, timeout_ms)
+            proc_env = _build_proc_env(
+                _isolated_opencode_env(process_invocation.env_override, temp_dir)
+            )
+            return _spawn_and_drive(
+                process_invocation.command,
+                process_invocation.args,
+                proc_env,
+                inv.cwd,
+                inv.cli,
+                timeout_ms,
+            )
         finally:
             # _spawn_and_drive reaps the process before returning.
             shutil.rmtree(temp_dir, ignore_errors=True)
 
-    proc_env = _build_proc_env(env_override)
-    return _spawn_and_drive(command, args, proc_env, inv.cwd, inv.cli, timeout_ms)
+    proc_env = _build_proc_env(process_invocation.env_override)
+    return _spawn_and_drive(
+        process_invocation.command,
+        process_invocation.args,
+        proc_env,
+        inv.cwd,
+        inv.cli,
+        timeout_ms,
+    )

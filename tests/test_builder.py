@@ -8,10 +8,7 @@ from unittest.mock import patch
 
 import pytest
 from _builder import (
-    _BUILDERS,
-    _EFFORT_SUPPORTED_CLIS,
-    _EFFORT_UNSUPPORTED_CLIS,
-    _PERMISSION_MAPPING,
+    _BACKEND_SPECS,
     AgentInvocation,
     build_command,
     build_invocation_args,
@@ -19,6 +16,7 @@ from _builder import (
     permission_flags,
 )
 from _constants import SUPPORTED_CLIS
+from _loader import PERMISSION_VALUES
 
 
 def _inv(cli, **kw):
@@ -42,10 +40,10 @@ def _credential_env(cli):
 
 class TestBuildCommand:
     def test_supported_cli_configuration_is_in_sync(self):
-        assert set(_BUILDERS) == set(SUPPORTED_CLIS)
-        assert set(_PERMISSION_MAPPING) == set(SUPPORTED_CLIS)
-        assert set(SUPPORTED_CLIS) == _EFFORT_SUPPORTED_CLIS | _EFFORT_UNSUPPORTED_CLIS
-        assert _EFFORT_SUPPORTED_CLIS.isdisjoint(_EFFORT_UNSUPPORTED_CLIS)
+        assert set(_BACKEND_SPECS) == set(SUPPORTED_CLIS)
+        assert all(
+            set(spec.permissions) == set(PERMISSION_VALUES) for spec in _BACKEND_SPECS.values()
+        )
 
     def test_codex_returns_exec_command_with_json_flag(self):
         cmd, args = build_command("codex", "test prompt")
@@ -135,17 +133,17 @@ class TestBuildInvocationArgs:
     def test_model_is_forwarded_to_every_backend(self, cli, model):
         env = _credential_env(cli)
         with patch.dict(os.environ, env, clear=bool(env)):
-            _, args, _ = build_invocation_args(_inv(cli, model=model))
-        model_idx = args.index("--model")
-        assert args[model_idx + 1] == model
-        assert model_idx < len(args) - 1
+            process = build_invocation_args(_inv(cli, model=model))
+        model_idx = process.args.index("--model")
+        assert process.args[model_idx + 1] == model
+        assert model_idx < len(process.args) - 1
 
     @pytest.mark.parametrize("cli", SUPPORTED_CLIS)
     def test_model_is_omitted_when_unspecified(self, cli):
         env = _credential_env(cli)
         with patch.dict(os.environ, env, clear=bool(env)):
-            _, args, _ = build_invocation_args(_inv(cli))
-        assert "--model" not in args
+            process = build_invocation_args(_inv(cli))
+        assert "--model" not in process.args
 
     @pytest.mark.parametrize(
         ("cli", "effort", "expected_pair"),
@@ -161,18 +159,18 @@ class TestBuildInvocationArgs:
     def test_effort_is_forwarded_without_value_validation(self, cli, effort, expected_pair):
         env = _credential_env(cli)
         with patch.dict(os.environ, env, clear=bool(env)):
-            _, args, _ = build_invocation_args(_inv(cli, effort=effort))
-        assert expected_pair in zip(args, args[1:])
+            process = build_invocation_args(_inv(cli, effort=effort))
+        assert expected_pair in zip(process.args, process.args[1:])
 
     @pytest.mark.parametrize("cli", SUPPORTED_CLIS)
     def test_effort_is_omitted_when_unspecified(self, cli):
         env = _credential_env(cli)
         with patch.dict(os.environ, env, clear=bool(env)):
-            _, args, _ = build_invocation_args(_inv(cli))
-        assert "--effort" not in args
-        assert "--reasoning-effort" not in args
-        assert "--variant" not in args
-        assert not any(arg.startswith("model_reasoning_effort=") for arg in args)
+            process = build_invocation_args(_inv(cli))
+        assert "--effort" not in process.args
+        assert "--reasoning-effort" not in process.args
+        assert "--variant" not in process.args
+        assert not any(arg.startswith("model_reasoning_effort=") for arg in process.args)
 
     @pytest.mark.parametrize("cli", ["cursor-agent", "gemini"])
     def test_unsupported_effort_fails_instead_of_being_ignored(self, cli):
@@ -186,92 +184,92 @@ class TestBuildInvocationArgs:
         ]
 
     def test_claude_uses_append_system_prompt_flag(self):
-        cmd, args, env = build_invocation_args(_inv("claude"))
-        assert cmd == "claude"
-        assert "--append-system-prompt" in args
-        sp_idx = args.index("--append-system-prompt")
-        system_prompt_value = args[sp_idx + 1]
+        process = build_invocation_args(_inv("claude"))
+        assert process.command == "claude"
+        assert "--append-system-prompt" in process.args
+        sp_idx = process.args.index("--append-system-prompt")
+        system_prompt_value = process.args[sp_idx + 1]
         assert "cwd: /test/cwd" in system_prompt_value
         assert "Agent definition" in system_prompt_value
-        assert "-p" in args
-        p_idx = args.index("-p")
-        assert args[p_idx + 1] == "User task"
-        assert env is None
+        assert "-p" in process.args
+        p_idx = process.args.index("-p")
+        assert process.args[p_idx + 1] == "User task"
+        assert process.env_override is None
 
     def test_gemini_uses_agent_file_for_system_md(self):
-        cmd, args, env = build_invocation_args(_inv("gemini", agent_file="/path/to/agent.md"))
-        assert cmd == "gemini"
-        p_idx = args.index("-p")
-        assert args[p_idx + 1] == "User task"
-        assert env == {"GEMINI_SYSTEM_MD": "/path/to/agent.md"}
+        process = build_invocation_args(_inv("gemini", agent_file="/path/to/agent.md"))
+        assert process.command == "gemini"
+        p_idx = process.args.index("-p")
+        assert process.args[p_idx + 1] == "User task"
+        assert process.env_override == {"GEMINI_SYSTEM_MD": "/path/to/agent.md"}
 
     def test_gemini_without_agent_file_concatenates(self):
-        cmd, args, env = build_invocation_args(_inv("gemini"))
-        assert cmd == "gemini"
-        p_idx = args.index("-p")
-        prompt_arg = args[p_idx + 1]
+        process = build_invocation_args(_inv("gemini"))
+        assert process.command == "gemini"
+        p_idx = process.args.index("-p")
+        prompt_arg = process.args[p_idx + 1]
         assert "[System Context]" in prompt_arg
         assert "Agent definition" in prompt_arg
-        assert env is None
+        assert process.env_override is None
 
     def test_codex_concatenates_prompt_even_when_agent_file_given(self):
-        cmd, args, env = build_invocation_args(_inv("codex", agent_file="/path/to/agent.md"))
-        assert cmd == "codex"
-        assert not any("model_instructions_file" in arg for arg in args)
-        prompt_arg = args[-1]
+        process = build_invocation_args(_inv("codex", agent_file="/path/to/agent.md"))
+        assert process.command == "codex"
+        assert not any("model_instructions_file" in arg for arg in process.args)
+        prompt_arg = process.args[-1]
         assert "[System Context]" in prompt_arg
         assert "Agent definition" in prompt_arg
         assert "[User Prompt]" in prompt_arg
         assert "User task" in prompt_arg
-        assert env is None
+        assert process.env_override is None
 
     def test_codex_falls_back_to_concatenation_without_agent_file(self):
-        cmd, args, env = build_invocation_args(_inv("codex"))
-        assert cmd == "codex"
-        prompt_arg = args[-1]
+        process = build_invocation_args(_inv("codex"))
+        assert process.command == "codex"
+        prompt_arg = process.args[-1]
         assert "[System Context]" in prompt_arg
         assert "Agent definition" in prompt_arg
         assert "[User Prompt]" in prompt_arg
         assert "User task" in prompt_arg
-        assert env is None
+        assert process.env_override is None
 
     def test_grok_concatenates_prompt_and_sets_cwd(self):
-        cmd, args, env = build_invocation_args(_inv("grok"))
-        assert cmd == "grok"
-        assert "--system-prompt-override" not in args
-        assert "--cwd" in args
-        cwd_idx = args.index("--cwd")
-        assert args[cwd_idx + 1] == "/test/cwd"
-        assert "-p" in args
-        p_idx = args.index("-p")
-        prompt_arg = args[p_idx + 1]
+        process = build_invocation_args(_inv("grok"))
+        assert process.command == "grok"
+        assert "--system-prompt-override" not in process.args
+        assert "--cwd" in process.args
+        cwd_idx = process.args.index("--cwd")
+        assert process.args[cwd_idx + 1] == "/test/cwd"
+        assert "-p" in process.args
+        p_idx = process.args.index("-p")
+        prompt_arg = process.args[p_idx + 1]
         assert "[System Context]" in prompt_arg
         assert "Agent definition" in prompt_arg
         assert "[User Prompt]" in prompt_arg
         assert "User task" in prompt_arg
-        assert env is None
+        assert process.env_override is None
 
     def test_cursor_concatenates_prompt(self):
         env_no_key = {
             k: v for k, v in os.environ.items() if k not in {"CURSOR_API_KEY", "CLI_API_KEY"}
         }
         with patch.dict("os.environ", env_no_key, clear=True):
-            cmd, args, env = build_invocation_args(_inv("cursor-agent"))
-        assert cmd == "cursor-agent"
-        p_idx = args.index("-p")
-        prompt_arg = args[p_idx + 1]
+            process = build_invocation_args(_inv("cursor-agent"))
+        assert process.command == "cursor-agent"
+        p_idx = process.args.index("-p")
+        prompt_arg = process.args[p_idx + 1]
         assert "[System Context]" in prompt_arg
         assert "Agent definition" in prompt_arg
-        assert env is None
+        assert process.env_override is None
 
     def test_cursor_passes_api_key_via_env_not_argv(self):
         with patch.dict("os.environ", {"CLI_API_KEY": "sk-secret"}, clear=True):
-            cmd, args, env = build_invocation_args(_inv("cursor-agent"))
-        assert cmd == "cursor-agent"
-        assert "sk-secret" not in args
-        assert "--api-key" not in args
-        assert "-a" not in args
-        assert env == {"CURSOR_API_KEY": "sk-secret"}
+            process = build_invocation_args(_inv("cursor-agent"))
+        assert process.command == "cursor-agent"
+        assert "sk-secret" not in process.args
+        assert "--api-key" not in process.args
+        assert "-a" not in process.args
+        assert process.env_override == {"CURSOR_API_KEY": "sk-secret"}
 
     def test_cursor_prefers_provider_specific_api_key(self):
         with patch.dict(
@@ -279,33 +277,33 @@ class TestBuildInvocationArgs:
             {"CURSOR_API_KEY": "cursor-secret", "CLI_API_KEY": "legacy-secret"},
             clear=True,
         ):
-            _, args, env = build_invocation_args(_inv("cursor-agent"))
-        assert env == {"CURSOR_API_KEY": "cursor-secret"}
-        assert "cursor-secret" not in args
-        assert "legacy-secret" not in args
+            process = build_invocation_args(_inv("cursor-agent"))
+        assert process.env_override == {"CURSOR_API_KEY": "cursor-secret"}
+        assert "cursor-secret" not in process.args
+        assert "legacy-secret" not in process.args
 
     def test_glm_uses_replace_system_prompt_and_injects_zai_env(self):
         with patch.dict("os.environ", {"CLI_API_KEY": "zai-secret"}, clear=True):
-            cmd, args, env = build_invocation_args(_inv("glm"))
-        assert cmd == "claude"
+            process = build_invocation_args(_inv("glm"))
+        assert process.command == "claude"
         # Full replace, NOT append — GLM runs on the agent def alone.
-        assert "--system-prompt" in args
-        assert "--append-system-prompt" not in args
-        sp_idx = args.index("--system-prompt")
-        system_prompt_value = args[sp_idx + 1]
+        assert "--system-prompt" in process.args
+        assert "--append-system-prompt" not in process.args
+        sp_idx = process.args.index("--system-prompt")
+        system_prompt_value = process.args[sp_idx + 1]
         assert "cwd: /test/cwd" in system_prompt_value
         assert "Agent definition" in system_prompt_value
-        p_idx = args.index("-p")
-        assert args[p_idx + 1] == "User task"
+        p_idx = process.args.index("-p")
+        assert process.args[p_idx + 1] == "User task"
         # Endpoint + credential routed via env; secret never in argv.
         # ANTHROPIC_API_KEY is mapped to None so _build_proc_env strips any
         # inherited Anthropic key from the child env (see executor tests).
-        assert env == {
+        assert process.env_override == {
             "ANTHROPIC_BASE_URL": "https://api.z.ai/api/anthropic",
             "ANTHROPIC_AUTH_TOKEN": "zai-secret",
             "ANTHROPIC_API_KEY": None,
         }
-        assert "zai-secret" not in args
+        assert "zai-secret" not in process.args
 
     def test_glm_strips_inherited_anthropic_api_key(self):
         # Even when the parent process has a real ANTHROPIC_API_KEY, the glm
@@ -315,9 +313,9 @@ class TestBuildInvocationArgs:
             {"CLI_API_KEY": "zai-secret", "ANTHROPIC_API_KEY": "sk-ant-real"},
             clear=True,
         ):
-            _, _, env = build_invocation_args(_inv("glm"))
-        assert env["ANTHROPIC_API_KEY"] is None
-        assert env["ANTHROPIC_AUTH_TOKEN"] == "zai-secret"
+            process = build_invocation_args(_inv("glm"))
+        assert process.env_override["ANTHROPIC_API_KEY"] is None
+        assert process.env_override["ANTHROPIC_AUTH_TOKEN"] == "zai-secret"
 
     def test_glm_prefers_provider_specific_api_key(self):
         with patch.dict(
@@ -325,10 +323,10 @@ class TestBuildInvocationArgs:
             {"GLM_API_KEY": "zai-primary", "CLI_API_KEY": "legacy-secret"},
             clear=True,
         ):
-            _, args, env = build_invocation_args(_inv("glm"))
-        assert env["ANTHROPIC_AUTH_TOKEN"] == "zai-primary"
-        assert "zai-primary" not in args
-        assert "legacy-secret" not in args
+            process = build_invocation_args(_inv("glm"))
+        assert process.env_override["ANTHROPIC_AUTH_TOKEN"] == "zai-primary"
+        assert "zai-primary" not in process.args
+        assert "legacy-secret" not in process.args
 
     @pytest.mark.parametrize(
         "env",
@@ -348,21 +346,21 @@ class TestBuildInvocationArgs:
 
     def test_kimi_uses_replace_system_prompt_and_injects_provider_env(self):
         with patch.dict("os.environ", {"KIMI_API_KEY": "kimi-secret"}, clear=True):
-            cmd, args, env = build_invocation_args(_inv("kimi"))
-        assert cmd == "claude"
-        assert "--system-prompt" in args
-        assert "--append-system-prompt" not in args
-        sp_idx = args.index("--system-prompt")
-        assert "cwd: /test/cwd" in args[sp_idx + 1]
-        assert "Agent definition" in args[sp_idx + 1]
-        p_idx = args.index("-p")
-        assert args[p_idx + 1] == "User task"
-        assert env == {
+            process = build_invocation_args(_inv("kimi"))
+        assert process.command == "claude"
+        assert "--system-prompt" in process.args
+        assert "--append-system-prompt" not in process.args
+        sp_idx = process.args.index("--system-prompt")
+        assert "cwd: /test/cwd" in process.args[sp_idx + 1]
+        assert "Agent definition" in process.args[sp_idx + 1]
+        p_idx = process.args.index("-p")
+        assert process.args[p_idx + 1] == "User task"
+        assert process.env_override == {
             "ANTHROPIC_BASE_URL": "https://api.kimi.com/coding/",
             "ANTHROPIC_API_KEY": "kimi-secret",
             "ANTHROPIC_AUTH_TOKEN": None,
         }
-        assert "kimi-secret" not in args
+        assert "kimi-secret" not in process.args
 
     def test_kimi_prefers_provider_specific_api_key_and_strips_auth_token(self):
         with patch.dict(
@@ -374,11 +372,11 @@ class TestBuildInvocationArgs:
             },
             clear=True,
         ):
-            _, args, env = build_invocation_args(_inv("kimi"))
-        assert env["ANTHROPIC_API_KEY"] == "kimi-primary"
-        assert env["ANTHROPIC_AUTH_TOKEN"] is None
-        assert "kimi-primary" not in args
-        assert "legacy-secret" not in args
+            process = build_invocation_args(_inv("kimi"))
+        assert process.env_override["ANTHROPIC_API_KEY"] == "kimi-primary"
+        assert process.env_override["ANTHROPIC_AUTH_TOKEN"] is None
+        assert "kimi-primary" not in process.args
+        assert "legacy-secret" not in process.args
 
     def test_kimi_falls_back_to_legacy_cli_api_key(self):
         with patch.dict(
@@ -386,9 +384,9 @@ class TestBuildInvocationArgs:
             {"KIMI_API_KEY": "   ", "CLI_API_KEY": "legacy-secret"},
             clear=True,
         ):
-            _, args, env = build_invocation_args(_inv("kimi"))
-        assert env["ANTHROPIC_API_KEY"] == "legacy-secret"
-        assert "legacy-secret" not in args
+            process = build_invocation_args(_inv("kimi"))
+        assert process.env_override["ANTHROPIC_API_KEY"] == "legacy-secret"
+        assert "legacy-secret" not in process.args
 
     @pytest.mark.parametrize(
         "env",
@@ -433,13 +431,13 @@ class TestBuildInvocationArgs:
         ],
     )
     def test_opencode_uses_configured_model_and_permission_env(self, permission, expected):
-        cmd, args, env = build_invocation_args(_inv("opencode", permission=permission))
-        assert cmd == "opencode"
-        assert args[:4] == ["run", "--format", "json", "--auto"]
-        assert "--model" not in args
-        assert "[System Context]" in args[-1]
-        assert "Agent definition" in args[-1]
-        assert json.loads(env["OPENCODE_PERMISSION"]) == expected
+        process = build_invocation_args(_inv("opencode", permission=permission))
+        assert process.command == "opencode"
+        assert process.args[:4] == ["run", "--format", "json", "--auto"]
+        assert "--model" not in process.args
+        assert "[System Context]" in process.args[-1]
+        assert "Agent definition" in process.args[-1]
+        assert json.loads(process.env_override["OPENCODE_PERMISSION"]) == expected
 
     def test_unknown_cli_raises(self):
         with pytest.raises(ValueError, match="Unsupported CLI"):
@@ -527,7 +525,7 @@ class TestPermissionAppliedToCommand:
     """End-to-end: permission level should produce the right CLI flags in args."""
 
     def test_codex_safe_edit_flags_in_args(self):
-        cmd, args, _ = build_invocation_args(
+        process = build_invocation_args(
             AgentInvocation(
                 cli="codex",
                 prompt="Task",
@@ -537,13 +535,13 @@ class TestPermissionAppliedToCommand:
                 permission="safe-edit",
             )
         )
-        assert "-s" in args
-        s_idx = args.index("-s")
-        assert args[s_idx + 1] == "workspace-write"
-        assert "approval_policy=never" in args
+        assert "-s" in process.args
+        s_idx = process.args.index("-s")
+        assert process.args[s_idx + 1] == "workspace-write"
+        assert "approval_policy=never" in process.args
 
     def test_claude_yolo_flag_in_args(self):
-        _, args, _ = build_invocation_args(
+        process = build_invocation_args(
             AgentInvocation(
                 cli="claude",
                 prompt="Task",
@@ -552,10 +550,10 @@ class TestPermissionAppliedToCommand:
                 permission="yolo",
             )
         )
-        assert "--dangerously-skip-permissions" in args
+        assert "--dangerously-skip-permissions" in process.args
 
     def test_gemini_read_only_flags_in_args(self):
-        _, args, _ = build_invocation_args(
+        process = build_invocation_args(
             AgentInvocation(
                 cli="gemini",
                 prompt="Task",
@@ -565,12 +563,12 @@ class TestPermissionAppliedToCommand:
                 permission="read-only",
             )
         )
-        assert "--approval-mode" in args
-        idx = args.index("--approval-mode")
-        assert args[idx + 1] == "plan"
+        assert "--approval-mode" in process.args
+        idx = process.args.index("--approval-mode")
+        assert process.args[idx + 1] == "plan"
 
     def test_cursor_safe_edit_in_args(self):
-        _, args, _ = build_invocation_args(
+        process = build_invocation_args(
             AgentInvocation(
                 cli="cursor-agent",
                 prompt="Task",
@@ -579,10 +577,10 @@ class TestPermissionAppliedToCommand:
                 permission="safe-edit",
             )
         )
-        assert "--trust" in args
+        assert "--trust" in process.args
 
     def test_grok_safe_edit_in_args(self):
-        _, args, _ = build_invocation_args(
+        process = build_invocation_args(
             AgentInvocation(
                 cli="grok",
                 prompt="Task",
@@ -591,6 +589,6 @@ class TestPermissionAppliedToCommand:
                 permission="safe-edit",
             )
         )
-        assert "--sandbox" in args
-        idx = args.index("--sandbox")
-        assert args[idx + 1] == "workspace"
+        assert "--sandbox" in process.args
+        idx = process.args.index("--sandbox")
+        assert process.args[idx + 1] == "workspace"
