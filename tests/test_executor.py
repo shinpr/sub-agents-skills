@@ -13,7 +13,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from _builder import AgentInvocation
+from _builder import AgentInvocation, ProcessInvocation
 from _executor import _build_proc_env, build_final_response, execute_agent
 from run_subagent import main
 
@@ -133,7 +133,7 @@ class TestExecuteAgent:
         with tempfile.TemporaryDirectory() as tmpdir:
             with patch(
                 "_executor.build_invocation_args",
-                return_value=("nonexistent-cli-12345", ["arg1"], None),
+                return_value=ProcessInvocation("nonexistent-cli-12345", ["arg1"]),
             ):
                 result = execute_agent(
                     AgentInvocation(

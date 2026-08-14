@@ -66,23 +66,21 @@ def main() -> None:
     agents_dir = get_agents_dir(args.agents_dir, args.cwd)
 
     try:
-        run_agent_cli, system_context, _, agent_file, permission, model, effort = load_agent(
-            agents_dir, args.agent
-        )
+        agent = load_agent(agents_dir, args.agent)
     except (FileNotFoundError, ValueError) as e:
         _print_error(str(e))
         sys.exit(1)
 
-    cli = args.cli or resolve_cli(run_agent_cli)
+    cli = args.cli or resolve_cli(agent.run_agent)
     invocation = AgentInvocation(
         cli=cli,
         prompt=args.prompt,
         cwd=args.cwd,
-        system_context=system_context,
-        agent_file=agent_file,
-        permission=permission,
-        model=model,
-        effort=effort,
+        system_context=agent.system_context,
+        agent_file=agent.file_path,
+        permission=agent.permission,
+        model=agent.model,
+        effort=agent.effort,
     )
 
     try:
