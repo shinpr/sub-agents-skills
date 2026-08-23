@@ -98,8 +98,9 @@ _ANTIGRAVITY_PERMISSIONS = {
 }
 
 _CURSOR_PERMISSIONS = {
-    "read-only": ("--mode", "plan"),
-    "safe-edit": ("--trust",),
+    # Cursor's execution mode and shell sandbox are independent controls.
+    "read-only": ("--mode", "plan", "--sandbox", "enabled"),
+    "safe-edit": ("--trust", "--sandbox", "enabled"),
     "yolo": ("-f", "--trust"),
 }
 
