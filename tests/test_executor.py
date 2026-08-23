@@ -170,6 +170,22 @@ class TestBuildFinalResponse:
 
         assert r["error"] == "Model is unavailable"
 
+    def test_cursor_non_auth_error_ignores_auth_phrases_in_structured_result(self):
+        with patch.dict("os.environ", {"CLI_API_KEY": "legacy-secret"}, clear=True):
+            r = build_final_response(
+                "cursor-agent",
+                1,
+                {
+                    "result": "Investigating an unauthorized response",
+                    "error": "Model is unavailable",
+                    "status": "error",
+                },
+                [],
+                "",
+            )
+
+        assert r["error"] == "Model is unavailable"
+
     def test_cursor_explicit_key_auth_error_does_not_blame_legacy_key(self):
         env = {"CURSOR_API_KEY": "cursor-secret", "CLI_API_KEY": "legacy-secret"}
         with patch.dict("os.environ", env, clear=True):

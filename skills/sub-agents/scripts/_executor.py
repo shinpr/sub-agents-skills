@@ -118,9 +118,8 @@ def build_final_response(
             msg += f": {stderr.strip()}"
         if cli == "cursor-agent":
             error_context = msg
-            raw_result = response["result"]
-            if isinstance(raw_result, str):
-                error_context += f"\n{raw_result[:8192]}"
+            if result is None:
+                error_context += f"\n{response['result'][:8192]}"
             msg = _cursor_legacy_key_guidance(error_context) or msg
         response["error"] = msg
     return response
