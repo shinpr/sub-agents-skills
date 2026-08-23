@@ -8,107 +8,11 @@
 
 Run task-specific agents on different AI coding backends from one parent tool.
 
-Use Codex, Claude Code, Cursor CLI, GLM, Kimi, Grok Build, Google Antigravity, and OpenCode as sub-agents in one workflow. Agent definitions are Markdown files, and each agent can select its execution backend. Gemini CLI remains available if you already use it.
+Define each agent once in Markdown, then choose its execution backend independently. Route implementation, review, investigation, or verification to a different coding backend without rewriting the agent definition.
 
-```mermaid
-graph LR
-    A["Your AI tool<br/>(Codex, Claude Code, Cursor...)"] --> B["run_subagent.py"]
-    B --> C["Codex"]
-    B --> D["Claude Code"]
-    B --> E["Cursor CLI"]
-    B --> H["Grok Build"]
-    B --> G["GLM"]
-    B --> K["Kimi"]
-    B --> F["Google Antigravity<br/>(Gemini models)"]
-    B -.-> GM["Gemini CLI<br/>(alternative)"]
-    B --> I["OpenCode"]
-    I --> J["Configured provider/model<br/>(API · gateway · local)"]
-    style B fill:#f5f5f5,stroke:#333
-```
+The skill itself follows the [Agent Skills](https://agentskills.io) standard; the agents it runs are Markdown files under `.agents/`.
 
-## Why?
-
-Most AI coding tools provide sub-agents tied to their own models. Claude Code delegates to Claude, and Codex delegates to GPT. Their built-in delegation does not provide a portable way to route a task to another provider's model.
-
-This skill lets each agent select a supported backend:
-
-- **Backend selection per task:** Choose Codex for a quick edit, Claude Code for a deeper pass, or another supported backend for a separate implementation pass.
-- **Portable definitions:** Plain Markdown agent files work with Codex, Claude Code, Cursor CLI, GLM, Kimi, Grok Build, Google Antigravity, VS Code, and [30+ other tools](https://agentskills.io) that support the Agent Skills format.
-- **Direct provider billing:** Choose which model handles each task and pay the provider at its API rates.
-- **Shared configuration:** Use the same agent definitions across a team with different IDEs or preferred LLMs.
-
-## Supported Backends
-
-Each agent definition specifies which CLI runs it via the `run-agent` frontmatter. You can mix backends freely within a project.
-
-| Backend | CLI Command | Install |
-|---------|-------------|---------|
-| **Codex** (OpenAI) | `codex` | `npm install -g @openai/codex` |
-| **Claude Code** (Anthropic) | `claude` | `curl -fsSL https://claude.ai/install.sh \| bash` |
-| **Cursor** | `cursor-agent` | `curl https://cursor.com/install -fsS \| bash` |
-| **GLM** (Z.ai) | `claude` (GLM endpoint) | Uses the Claude Code binary (see below) |
-| **Kimi** | `claude` (Kimi endpoint) | Uses the Claude Code binary (see below) |
-| **Grok Build** (SpaceX AI) | `grok` | `curl -fsSL https://x.ai/cli/install.sh \| bash` |
-| **Antigravity** (Google) | `agy` | `curl -fsSL https://antigravity.google/cli/install.sh \| bash` |
-| **OpenCode** | `opencode` | `brew install anomalyco/tap/opencode` |
-
-You only need to install the backends you plan to use. For Google models, use Antigravity CLI 1.1.12 or later. Existing Gemini CLI installations continue to work with `run-agent: gemini`.
-
-### GLM (Z.ai)
-
-The `glm` backend runs the **Claude Code binary** against GLM's Anthropic-compatible endpoint, so it reuses Claude Code's streaming output and needs no separate CLI. Install `claude` as shown above. Unlike the `claude` backend, which appends the agent definition to Claude Code's default system prompt, the `glm` backend replaces the system prompt entirely, so the model runs on its own characteristics.
-
-Set your Z.ai token in `GLM_API_KEY` before running a `glm` agent:
-
-```bash
-export GLM_API_KEY=<your-z.ai-token>
-```
-
-The skill forwards it to the Claude binary as the Z.ai credential (via env, never argv) and points the binary at `https://api.z.ai/api/anthropic`. Requests are billed by Z.ai, not Anthropic. Existing `CLI_API_KEY` configurations remain supported as a fallback.
-
-### Kimi
-
-The `kimi` backend runs the **Claude Code binary** against Kimi's coding endpoint, so it needs no separate CLI and reuses the same streaming output, model, effort, and permission controls as Claude Code. Like GLM, it replaces Claude Code's default system prompt with the selected agent definition.
-
-Install `claude` as shown above, create a Kimi API key, and set:
-
-```bash
-export KIMI_API_KEY=<your-kimi-api-key>
-```
-
-The skill sends the key through the child environment, never argv, and points Claude Code at `https://api.kimi.com/coding/`. Existing `CLI_API_KEY` configurations are accepted as a fallback.
-
-Provider-specific keys take priority over `CLI_API_KEY`, so GLM, Kimi, and Cursor credentials can stay configured together while different agents select the backend they need:
-
-```bash
-export GLM_API_KEY=<your-z.ai-token>
-export KIMI_API_KEY=<your-kimi-api-key>
-export CURSOR_API_KEY=<your-cursor-token> # optional when cursor-agent is logged in
-```
-
-### OpenCode
-
-The `opencode` backend runs a model selected in the agent definition, or the
-user's configured default when `model` is omitted. This provides one generic
-route to OpenCode-supported providers, OpenAI-compatible APIs, gateways, and
-local models without adding a backend for every model service.
-
-Configure the provider, credentials, and default model in
-`~/.config/opencode/opencode.json` or the project's `opencode.json`, then use:
-
-```markdown
----
-run-agent: opencode
-model: provider/model-id
-effort: provider-variant
-permission: safe-edit
----
-```
-
-OpenCode model values use `provider/model` syntax. The runner passes an explicit
-value through `--model`; without one, OpenCode resolves its configured default.
-When `effort` is set, the runner passes it through as OpenCode's model-specific
-`--variant` value.
+![AI coding backends selected for design, implementation, and review](docs/assets/header.jpg)
 
 ## Quick Start
 
@@ -198,53 +102,47 @@ Review code for quality and maintainability issues.
 - Issues listed with explanations
 ```
 
-The `run-agent` frontmatter specifies which CLI executes this agent. See [Writing Effective Agents](#writing-effective-agents) for more on agent design.
+The `run-agent` frontmatter specifies which backend executes this agent. See [Writing Agents](#writing-agents) for more on agent design.
 
-### 3. Fix "Permission Denied" Errors When Running Shell Commands
+### 3. Run It
 
-Sub-agents may fail to execute shell commands with permission errors. This happens because sub-agents can't respond to interactive permission prompts.
+Ask your parent AI tool:
 
-**Recommended approach:**
+```text
+Use the code-reviewer agent to review the authentication changes.
+```
 
-1. Run your CLI tool directly with the task you want sub-agents to handle:
-   ```bash
-   codex           # For Codex users
-   claude          # For Claude Code users
-   cursor-agent    # For Cursor CLI users
-   grok            # For Grok Build users
-   agy             # For Google models
-   opencode        # For OpenCode users
-   ```
+The parent tool invokes the agent with the selected backend and returns its result.
 
-   For an agent configured with `run-agent: gemini`, run `gemini` instead.
+## Why?
 
-2. When prompted to allow commands (e.g., "Add Shell(cd), Shell(make) to allowlist?"), approve them
+Most AI coding tools provide sub-agents tied to their own models. Claude Code delegates to Claude, and Codex delegates to GPT. Their built-in delegation does not provide a portable way to route a task to another provider's model.
 
-3. Approving updates your configuration file, so those commands will work when invoked via sub-agents
+Sub-Agents Skills separates an agent's role from its execution backend. The Markdown file defines what the agent does, while `run-agent` selects where it runs. Changing the backend does not require rewriting the role, task, or output instructions.
+
+Because the runner is packaged as an Agent Skill, the same `.agents/` definitions can be used from different supported parent tools.
 
 ## Usage Examples
 
 To run an agent, describe the task in your prompt:
 
-```
-"Use the code-reviewer agent to check my UserService class"
-```
-
-```
-"Use the test-writer agent to create unit tests for the auth module"
+```text
+Use the code-reviewer agent to check my UserService class.
 ```
 
+```text
+Use the test-writer agent to create unit tests for the auth module.
 ```
-"Use the doc-writer agent to add JSDoc comments to all public methods"
+
+```text
+Use the doc-writer agent to add JSDoc comments to all public methods.
 ```
 
-The host tool invokes the agent and returns results.
+### Mixing Backends in One Project
 
-**Mixing backends in one project:**
+Agents using different backends can live side by side:
 
-You can have agents that use different LLMs side by side:
-
-```
+```text
 .agents/
 ├── test-writer.md         # run-agent: codex
 ├── code-reviewer.md       # run-agent: claude
@@ -252,29 +150,39 @@ You can have agents that use different LLMs side by side:
 └── alternate-reviewer.md  # run-agent: grok
 ```
 
+```text
+Use the code-reviewer and alternate-reviewer agents in parallel, then send the agreed changes to kimi-implementer.
 ```
-"Use the code-reviewer and alternate-reviewer agents in parallel, then send the agreed changes to kimi-implementer"
-```
 
-**Tip:** Include *what you want done* in the request, not only the agent name. Specific requests produce more useful results.
+Name both the agent and the task in the request; an agent name alone does not provide a task.
 
-## Writing Effective Agents
+## Supported Backends
 
-### The Single Responsibility Principle
+Set `run-agent` in each agent definition. The value selects a backend; some backends share an underlying executable.
 
-Each agent should do **one thing well**. Avoid "swiss army knife" agents.
+| `run-agent` | Backend | Executed CLI |
+|-------------|---------|--------------|
+| `codex` | Codex | `codex` |
+| `claude` | Claude Code | `claude` |
+| `cursor-agent` | Cursor CLI | `cursor-agent` |
+| `glm` | GLM (Z.ai) | `claude` with the Z.ai endpoint |
+| `kimi` | Kimi | `claude` with the Kimi endpoint |
+| `grok` | Grok Build | `grok` |
+| `antigravity` | Google Antigravity | `agy` |
+| `gemini` | Gemini CLI (compatibility) | `gemini` |
+| `opencode` | OpenCode | `opencode` |
 
-| Good | Bad |
-|------|-----|
-| Reviews code for security issues | Reviews code, writes tests, and refactors |
-| Writes unit tests for a module | Writes tests and fixes bugs it finds |
+Install only the CLIs you plan to use. For Google models, prefer Antigravity CLI 1.1.12 or later; existing Gemini CLI configurations remain supported.
 
-### Essential Structure
+## Writing Agents
+
+Agent definitions are `.md` or `.txt` files under `.agents/`. For normal use, include `run-agent` in the YAML frontmatter and keep the task instructions in the body.
 
 ```markdown
 ---
-run-agent: codex
-model: gpt-5.4-mini
+run-agent: claude
+model: opus
+effort: high
 permission: safe-edit
 ---
 
@@ -291,34 +199,44 @@ One-sentence purpose.
 - Criterion 2
 ```
 
+<details>
+<summary>Frontmatter reference</summary>
+
 ### Frontmatter Options
 
 | Field | Values | Description |
 |-------|--------|-------------|
-| `run-agent` | `codex`, `claude`, `cursor-agent`, `glm`, `kimi`, `grok`, `antigravity`, `gemini`, `opencode` | Which CLI executes this agent |
+| `run-agent` | `codex`, `claude`, `cursor-agent`, `glm`, `kimi`, `grok`, `antigravity`, `gemini`, `opencode` | Which backend executes this agent |
 | `model` | Backend-specific model name (optional) | Model passed to the selected CLI; omit to use its configured default |
 | `effort` | Backend/model-specific value (optional) | Reasoning-effort override; omit to use the backend/model default |
 | `permission` | `read-only`, `safe-edit` (default), `yolo` | Approval/sandbox level the sub-agent runs with |
 
 `run-agent` is required unless `--cli` explicitly overrides it for one run.
 
-`effort` is an advanced option whose accepted values depend on both the backend
-and model. The runner treats the value as opaque and forwards it unchanged to
-Codex as `model_reasoning_effort`, Claude/GLM/Kimi/Antigravity as `--effort`, Grok as
-`--reasoning-effort`, and OpenCode as `--variant`. Set it when the selected
-model's accepted values are confirmed in the CLI/provider documentation;
-otherwise omit the field and use the backend/model default. Invalid combinations
-fail at runtime. For the current GLM-5.2 target, use `high` or `max`. Cursor and
-Gemini are unsupported for this field; selecting either backend with `effort`
-set returns an error.
+`effort` is forwarded unchanged to the selected backend. Accepted values depend
+on the backend and model, so check the provider documentation before setting it.
+Invalid combinations fail at runtime. Cursor and Gemini do not support this
+field.
 
 **Permission levels:**
 
 - `read-only`: investigation/review only, no edits or shell writes (codex `-s read-only` / claude `--permission-mode plan` / cursor `--mode plan` / grok `--sandbox read-only` / antigravity `--mode plan --sandbox` / gemini `--approval-mode plan` / OpenCode permission deny rules)
-- `safe-edit`: auto-approve edits inside the workspace, suppress prompts (default; codex `-s workspace-write` + `approval_policy=never` / claude `--permission-mode acceptEdits` / cursor `--trust` / grok `--sandbox workspace` / antigravity `--mode accept-edits --sandbox` / gemini `--approval-mode auto_edit` / OpenCode `external_directory: deny`)
-- `yolo`: bypass all approvals and sandboxing. Use with care.
+- `safe-edit`: default non-interactive edit mode (codex `-s workspace-write` + `approval_policy=never` / claude `--permission-mode acceptEdits` / cursor `--trust` / grok `--sandbox workspace` / antigravity `--mode accept-edits --sandbox` / gemini `--approval-mode auto_edit` / OpenCode permission rules)
+- `yolo`: bypass all approvals and sandboxing; use it only for tasks and environments you trust.
 
-Sub-agents have no stdin, so any approval prompt would deadlock the run. The default `safe-edit` keeps normal tool writes confined to the workspace while suppressing prompts. OpenCode permission controls are not an OS-level sandbox and cannot confine every side effect of arbitrary programs launched through bash.
+Sub-agents have no stdin, so the runner uses non-interactive backend modes. The
+isolation guarantees depend on the selected CLI; permission flags are not
+equivalent across backends.
+
+</details>
+
+<details>
+<summary>Agent authoring guidelines</summary>
+
+### Keep Each Agent Focused
+
+Give each agent one responsibility. Separate review, implementation, and test
+generation when they need different instructions or permissions.
 
 ### Keep Agents Self-Contained
 
@@ -326,17 +244,20 @@ Agents run in isolation with fresh context. Avoid:
 
 - References to other agents ("then use X agent...")
 - Assumptions about prior context ("continuing from before...")
-- Scope creep beyond the stated purpose
+- Tasks outside the agent's stated responsibility
 
 ### Optional Agent Sections
 
-For complex agents, consider adding:
+Add these sections when the agent needs them:
 
 - **Scope boundaries**: Explicitly state what's *out of scope*
 - **Prohibited actions**: List common mistakes the agent should avoid
 - **Output format**: Define structured output when needed
 
-## Agent Examples
+</details>
+
+<details>
+<summary>Complete agent example</summary>
 
 Each `.md` or `.txt` file in your `.agents/` folder becomes an agent. The filename becomes the agent name (e.g., `bug-investigator.md` → "bug-investigator").
 
@@ -369,7 +290,12 @@ Investigate bug reports and identify root causes.
 
 For more advanced patterns (completion checklists, prohibited actions, structured output), see [claude-code-workflows/agents](https://github.com/shinpr/claude-code-workflows/tree/main/agents).
 
+</details>
+
 ## Configuration Reference
+
+<details>
+<summary>Agent location and backend selection</summary>
 
 ### Agent Definition Location
 
@@ -389,6 +315,11 @@ To customize: `export SUB_AGENTS_DIR=/custom/path`
 
 `--cli` always overrides the agent definition's `run-agent`; omit it for normal runs.
 
+</details>
+
+<details>
+<summary>Direct runner CLI parameters</summary>
+
 ### Script Parameters
 
 | Parameter | Required | Description |
@@ -402,11 +333,127 @@ To customize: `export SUB_AGENTS_DIR=/custom/path`
 
 *Required when not using --list
 
-### Security Note
+</details>
+
+## Backend Setup
+
+Most backends use their CLI's existing authentication. The following backends
+need additional routing or provider configuration.
+
+<a id="glm-zai"></a>
+<details>
+<summary>GLM (Z.ai)</summary>
+
+The `glm` backend runs the Claude Code binary against GLM's
+Anthropic-compatible endpoint. Install Claude Code, then set your Z.ai token:
+
+```bash
+export GLM_API_KEY=<your-z.ai-token>
+```
+
+The runner sends the key through the child environment and points Claude Code
+at `https://api.z.ai/api/anthropic`. `CLI_API_KEY` remains supported as a
+fallback.
+
+</details>
+
+<a id="kimi"></a>
+<details>
+<summary>Kimi</summary>
+
+The `kimi` backend runs the Claude Code binary against Kimi's coding endpoint.
+Install Claude Code, then set your Kimi API key:
+
+```bash
+export KIMI_API_KEY=<your-kimi-api-key>
+```
+
+The runner sends the key through the child environment and points Claude Code
+at `https://api.kimi.com/coding/`. `CLI_API_KEY` remains supported as a
+fallback.
+
+Provider-specific keys take priority, so multiple backends can remain
+configured at the same time:
+
+```bash
+export GLM_API_KEY=<your-z.ai-token>
+export KIMI_API_KEY=<your-kimi-api-key>
+export CURSOR_API_KEY=<your-cursor-token> # optional when cursor-agent is logged in
+```
+
+</details>
+
+<a id="opencode"></a>
+<details>
+<summary>OpenCode</summary>
+
+The `opencode` backend uses the model selected in the agent definition, or the
+configured OpenCode default when `model` is omitted. This provides one route to
+OpenCode-supported providers, OpenAI-compatible APIs, gateways, and local models.
+
+Configure OpenCode in `~/.config/opencode/opencode.json` or the project's
+`opencode.json`, then use provider/model syntax when selecting a model:
+
+```markdown
+---
+run-agent: opencode
+model: provider/model-id
+effort: provider-variant
+permission: safe-edit
+---
+```
+
+The runner passes `model` through `--model` and `effort` through OpenCode's
+`--variant` option.
+
+</details>
+
+## Security
 
 Agent definitions are system prompts that control what the sub-agent does. A malicious agent definition could instruct the sub-agent to read sensitive files, execute harmful commands, or exfiltrate data.
 
 Only use agent definitions you've written yourself or from sources you trust. Review any third-party agent definitions before use.
+
+## How It Works
+
+The parent tool reads the installed `SKILL.md`, which tells it how to invoke the
+runner. The runner loads the selected `.agents/*.md` definition, calls its
+configured backend, and returns the result.
+
+```mermaid
+graph LR
+    A["Your AI tool<br/>(Codex, Claude Code, Cursor...)"] --> B["run_subagent.py"]
+    B --> C["Codex"]
+    B --> D["Claude Code"]
+    B --> E["Cursor CLI"]
+    B --> H["Grok Build"]
+    B --> G["GLM"]
+    B --> K["Kimi"]
+    B --> F["Google Antigravity<br/>(Gemini models)"]
+    B -.-> GM["Gemini CLI<br/>(compatibility)"]
+    B --> I["OpenCode"]
+    I --> J["Configured provider/model<br/>(API · gateway · local)"]
+    style B fill:#f5f5f5,stroke:#333
+```
+
+```text
+skills/sub-agents/
+├── SKILL.md              # Instructions for the parent tool
+├── scripts/
+│   └── run_subagent.py   # Calls external CLIs
+└── references/
+    └── codex.md          # Host-specific setup notes
+```
+
+### Independent Contexts
+
+Each sub-agent invocation starts a fresh conversation. It does not inherit
+another sub-agent's chat history, but it does share the selected working
+directory and its files.
+
+The parent receives the result returned by the runner, not the sub-agent's
+accumulated conversation history. Each call starts a separate CLI process and
+therefore has its own startup cost.
 
 ## Troubleshooting
 
@@ -456,33 +503,6 @@ If you use Gemini CLI, install it with `npm install -g @google/gemini-cli`.
 1. Verify the agent definition has valid `run-agent` frontmatter
 2. Ensure your chosen CLI tool is installed and accessible
 3. Check that `--cwd` is an absolute path to an existing directory
-
-## Design Philosophy
-
-### Why Independent Contexts?
-
-Every sub-agent starts fresh. No shared state, no context from previous runs.
-
-Each call has some startup overhead, but previous runs do not add state to the next one. When you split a large task into sub-agents, each agent receives only the context for its assigned goal.
-
-The main agent stays lightweight too. It coordinates work without accumulating all the sub-agent context in its own window.
-
-### Agent Skills as an Open Standard
-
-This skill uses the [Agent Skills](https://agentskills.io) format for packaging reusable AI agent capabilities as portable files. Codex, Claude Code, Cursor CLI, Grok Build, Google Antigravity, and [30+ other tools](https://agentskills.io) support the format, so the same skill can be used across these environments.
-
-## How It Works
-
-Your AI reads the skill definition (SKILL.md), which tells it how to invoke the Python script. The script reads the agent definition (your `.agents/*.md` file), calls the appropriate CLI, and returns the result.
-
-```
-skills/sub-agents/
-├── SKILL.md              # Instructions for the AI
-├── scripts/
-│   └── run_subagent.py   # Calls external CLIs
-└── references/
-    └── codex.md          # Codex-specific setup docs
-```
 
 ## License
 
