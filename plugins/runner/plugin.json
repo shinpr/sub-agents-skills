@@ -1,7 +1,7 @@
 {
   "name": "runner",
   "version": "0.10.3",
-  "description": "Sub-agent runner — runs agent definitions on Codex, Claude Code, Cursor CLI, GLM, Kimi, Grok Build, Gemini CLI, or OpenCode from any host AI tool.",
+  "description": "Sub-agent runner — runs agent definitions on Codex, Claude Code, Cursor CLI, GLM, Kimi, Grok Build, Google Antigravity, Gemini CLI, or OpenCode from any host AI tool.",
   "author": {
     "name": "Shinsuke Kagawa",
     "url": "https://github.com/shinpr"
@@ -20,6 +20,7 @@
     "kimi",
     "z.ai",
     "grok",
+    "antigravity",
     "gemini",
     "opencode"
   ],

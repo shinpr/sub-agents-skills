@@ -82,6 +82,11 @@ class TestBuildCommand:
             "test prompt",
         ]
 
+    def test_antigravity_returns_streaming_json_command(self):
+        cmd, args = build_command("antigravity", "test prompt")
+        assert cmd == "agy"
+        assert args == ["--output-format", "stream-json", "-p", "test prompt"]
+
     def test_grok_returns_json_command_with_turn_budget(self):
         cmd, args = build_command("grok", "test prompt")
         assert cmd == "grok"
@@ -127,6 +132,7 @@ class TestBuildInvocationArgs:
             ("kimi", "kimi-for-coding"),
             ("grok", "grok-code-fast-1"),
             ("gemini", "gemini-3-flash-preview"),
+            ("antigravity", "gemini-3.7-flash-high"),
             ("opencode", "test-provider/test-model"),
         ],
     )
@@ -153,6 +159,7 @@ class TestBuildInvocationArgs:
             ("glm", "max", ("--effort", "max")),
             ("kimi", "high", ("--effort", "high")),
             ("grok", "high", ("--reasoning-effort", "high")),
+            ("antigravity", "high", ("--effort", "high")),
             ("opencode", "vendor-level", ("--variant", "vendor-level")),
         ],
     )
@@ -211,6 +218,16 @@ class TestBuildInvocationArgs:
         assert "[System Context]" in prompt_arg
         assert "Agent definition" in prompt_arg
         assert process.env_override is None
+
+    def test_antigravity_concatenates_agent_definition(self):
+        process = build_invocation_args(_inv("antigravity"))
+        assert process.command == "agy"
+        p_idx = process.args.index("-p")
+        prompt_arg = process.args[p_idx + 1]
+        assert "[System Context]" in prompt_arg
+        assert "Agent definition" in prompt_arg
+        assert "[User Prompt]" in prompt_arg
+        assert "User task" in prompt_arg
 
     def test_codex_concatenates_prompt_even_when_agent_file_given(self):
         process = build_invocation_args(_inv("codex", agent_file="/path/to/agent.md"))
@@ -479,6 +496,15 @@ class TestPermissionFlags:
         assert permission_flags("gemini", "read-only") == ["--approval-mode", "plan"]
         assert permission_flags("gemini", "safe-edit") == ["--approval-mode", "auto_edit"]
         assert permission_flags("gemini", "yolo") == ["-y"]
+
+    def test_antigravity_flags(self):
+        assert permission_flags("antigravity", "read-only") == ["--mode", "plan", "--sandbox"]
+        assert permission_flags("antigravity", "safe-edit") == [
+            "--mode",
+            "accept-edits",
+            "--sandbox",
+        ]
+        assert permission_flags("antigravity", "yolo") == ["--dangerously-skip-permissions"]
 
     def test_cursor_flags(self):
         assert permission_flags("cursor-agent", "read-only") == ["--mode", "plan"]

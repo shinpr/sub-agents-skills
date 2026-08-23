@@ -97,6 +97,30 @@ class StreamProcessor:
 
         return False
 
+    def _process_antigravity_line(self, data: dict) -> bool:
+        if data.get("event") != "result":
+            return False
+
+        payload = data.get("result")
+        if not isinstance(payload, dict) or not isinstance(payload.get("response"), str):
+            return False
+
+        status = payload.get("status")
+        if status == "SUCCESS":
+            normalized_status = "success"
+        elif status in ("CANCELED", "INTERRUPTED", "WAITING", "RUNNING"):
+            normalized_status = "partial"
+        else:
+            normalized_status = "error"
+        self.result_json = {
+            "type": "result",
+            "result": payload["response"],
+            "status": normalized_status,
+        }
+        if isinstance(payload.get("error"), str):
+            self.result_json["error"] = payload["error"]
+        return True
+
     def _process_codex_line(self, data: dict) -> bool:
         if data.get("type") == "item.completed":
             item = data.get("item", {})
@@ -204,6 +228,7 @@ _LINE_PROCESSORS = {
     "glm": StreamProcessor._process_result_line,
     "kimi": StreamProcessor._process_result_line,
     "grok": StreamProcessor._process_grok_line,
+    "antigravity": StreamProcessor._process_antigravity_line,
     "gemini": StreamProcessor._process_gemini_line,
     "opencode": StreamProcessor._process_opencode_line,
 }

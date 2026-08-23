@@ -407,6 +407,25 @@ class TestExecuteAgent:
                 popen_kwargs = mock_popen.call_args[1]
                 assert popen_kwargs["env"]["GEMINI_SYSTEM_MD"] == agent_file
 
+    def test_antigravity_ndjson_output_is_normalized(self):
+        mock_process = MagicMock()
+        mock_process.stdout.readline.side_effect = [
+            '{"event":"init","conversation_id":"c1"}\n',
+            '{"event":"step_update","step_update":{"text_delta":"DONE"}}\n',
+            '{"event":"result","result":{"status":"SUCCESS","response":"DONE"}}\n',
+            "",
+        ]
+        mock_process.communicate.return_value = ("", "")
+        mock_process.returncode = 0
+
+        with patch("subprocess.Popen", return_value=mock_process):
+            result = execute_agent(
+                AgentInvocation(cli="antigravity", prompt="x", cwd="/tmp"),
+                timeout_ms=5000,
+            )
+        assert result["status"] == "success"
+        assert result["result"] == "DONE"
+
     def test_grok_pretty_json_output_is_parsed_after_exit(self):
         mock_process = MagicMock()
         mock_process.stdout.readline.side_effect = [

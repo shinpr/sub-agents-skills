@@ -8,7 +8,7 @@
 
 Run task-specific agents on different AI coding backends from one parent tool.
 
-Use Codex, Claude Code, Cursor CLI, GLM, Kimi, Grok Build, Gemini CLI, and OpenCode as sub-agents in one workflow. Agent definitions are Markdown files, and each agent can select its execution backend.
+Use Codex, Claude Code, Cursor CLI, GLM, Kimi, Grok Build, Google Antigravity, Gemini CLI, and OpenCode as sub-agents in one workflow. Agent definitions are Markdown files, and each agent can select its execution backend.
 
 ```mermaid
 graph LR
@@ -19,7 +19,8 @@ graph LR
     B --> H["Grok Build"]
     B --> G["GLM"]
     B --> K["Kimi"]
-    B --> F["Gemini CLI"]
+    B --> F["Google Antigravity"]
+    B --> GM["Gemini CLI"]
     B --> I["OpenCode"]
     I --> J["Configured provider/model<br/>(API · gateway · local)"]
     style B fill:#f5f5f5,stroke:#333
@@ -32,7 +33,7 @@ Most AI coding tools provide sub-agents tied to their own models. Claude Code de
 This skill lets each agent select a supported backend:
 
 - **Backend selection per task:** Choose Codex for a quick edit, Claude Code for a deeper pass, or another supported backend for a separate implementation pass.
-- **Portable definitions:** Plain Markdown agent files work with Codex, Claude Code, Cursor CLI, GLM, Kimi, Grok Build, Gemini CLI, VS Code, and [30+ other tools](https://agentskills.io) that support the Agent Skills format.
+- **Portable definitions:** Plain Markdown agent files work with Codex, Claude Code, Cursor CLI, GLM, Kimi, Grok Build, Antigravity, Gemini CLI, VS Code, and [30+ other tools](https://agentskills.io) that support the Agent Skills format.
 - **Direct provider billing:** Choose which model handles each task and pay the provider at its API rates.
 - **Shared configuration:** Use the same agent definitions across a team with different IDEs or preferred LLMs.
 
@@ -48,10 +49,11 @@ Each agent definition specifies which CLI runs it via the `run-agent` frontmatte
 | **GLM** (Z.ai) | `claude` (GLM endpoint) | Uses the Claude Code binary (see below) |
 | **Kimi** | `claude` (Kimi endpoint) | Uses the Claude Code binary (see below) |
 | **Grok Build** (SpaceX AI) | `grok` | `curl -fsSL https://x.ai/cli/install.sh \| bash` |
-| **Gemini** (Google) | `gemini` | `npm install -g @google/gemini-cli` |
+| **Antigravity** (Google) | `agy` | `curl -fsSL https://antigravity.google/cli/install.sh \| bash` |
+| **Gemini CLI** (Google) | `gemini` | `npm install -g @google/gemini-cli` |
 | **OpenCode** | `opencode` | `brew install anomalyco/tap/opencode` |
 
-You only need to install the backends you plan to use.
+You only need to install the backends you plan to use. Antigravity CLI 1.1.12 or later is required. Antigravity is the primary Google backend; existing Gemini CLI installations remain supported through `run-agent: gemini`.
 
 ### GLM (Z.ai)
 
@@ -144,6 +146,12 @@ grok plugin marketplace add shinpr/sub-agents-skills
 grok plugin install runner --trust
 ```
 
+**Google Antigravity (plugin):**
+
+```sh
+agy plugin install https://github.com/shinpr/sub-agents-skills/tree/main/plugins/runner
+```
+
 **Other clients (Cursor CLI, Gemini CLI, VS Code, etc.):**
 
 Use the install script to copy the skill into the client's skill path:
@@ -205,7 +213,8 @@ Sub-agents may fail to execute shell commands with permission errors. This happe
    claude          # For Claude Code users
    cursor-agent    # For Cursor CLI users
    grok            # For Grok Build users
-   gemini          # For Gemini CLI users
+   agy             # For Google Antigravity users
+   gemini          # Gemini CLI also remains supported
    opencode        # For OpenCode users
    ```
 
@@ -286,7 +295,7 @@ One-sentence purpose.
 
 | Field | Values | Description |
 |-------|--------|-------------|
-| `run-agent` | `codex`, `claude`, `cursor-agent`, `glm`, `kimi`, `grok`, `gemini`, `opencode` | Which CLI executes this agent |
+| `run-agent` | `codex`, `claude`, `cursor-agent`, `glm`, `kimi`, `grok`, `antigravity`, `gemini`, `opencode` | Which CLI executes this agent |
 | `model` | Backend-specific model name (optional) | Model passed to the selected CLI; omit to use its configured default |
 | `effort` | Backend/model-specific value (optional) | Reasoning-effort override; omit to use the backend/model default |
 | `permission` | `read-only`, `safe-edit` (default), `yolo` | Approval/sandbox level the sub-agent runs with |
@@ -295,7 +304,7 @@ One-sentence purpose.
 
 `effort` is an advanced option whose accepted values depend on both the backend
 and model. The runner treats the value as opaque and forwards it unchanged to
-Codex as `model_reasoning_effort`, Claude/GLM/Kimi as `--effort`, Grok as
+Codex as `model_reasoning_effort`, Claude/GLM/Kimi/Antigravity as `--effort`, Grok as
 `--reasoning-effort`, and OpenCode as `--variant`. Set it when the selected
 model's accepted values are confirmed in the CLI/provider documentation;
 otherwise omit the field and use the backend/model default. Invalid combinations
@@ -305,8 +314,8 @@ set returns an error.
 
 **Permission levels:**
 
-- `read-only`: investigation/review only, no edits or shell writes (codex `-s read-only` / claude `--permission-mode plan` / cursor `--mode plan` / grok `--sandbox read-only` / gemini `--approval-mode plan` / OpenCode permission deny rules)
-- `safe-edit`: auto-approve edits inside the workspace, suppress prompts (default; codex `-s workspace-write` + `approval_policy=never` / claude `--permission-mode acceptEdits` / cursor `--trust` / grok `--sandbox workspace` / gemini `--approval-mode auto_edit` / OpenCode `external_directory: deny`)
+- `read-only`: investigation/review only, no edits or shell writes (codex `-s read-only` / claude `--permission-mode plan` / cursor `--mode plan` / grok `--sandbox read-only` / antigravity `--mode plan --sandbox` / gemini `--approval-mode plan` / OpenCode permission deny rules)
+- `safe-edit`: auto-approve edits inside the workspace, suppress prompts (default; codex `-s workspace-write` + `approval_policy=never` / claude `--permission-mode acceptEdits` / cursor `--trust` / grok `--sandbox workspace` / antigravity `--mode accept-edits --sandbox` / gemini `--approval-mode auto_edit` / OpenCode `external_directory: deny`)
 - `yolo`: bypass all approvals and sandboxing. Use with care.
 
 Sub-agents have no stdin, so any approval prompt would deadlock the run. The default `safe-edit` keeps normal tool writes confined to the workspace while suppressing prompts. OpenCode permission controls are not an OS-level sandbox and cannot confine every side effect of arbitrary programs launched through bash.
@@ -389,7 +398,7 @@ To customize: `export SUB_AGENTS_DIR=/custom/path`
 | `--prompt` | Yes* | Task description to delegate |
 | `--cwd` | Yes* | Working directory (absolute path) |
 | `--timeout` | No | Timeout ms (default: 600000) |
-| `--cli` | No | Force CLI: `codex`, `claude`, `cursor-agent`, `glm`, `kimi`, `grok`, `gemini`, `opencode` |
+| `--cli` | No | Force CLI: `codex`, `claude`, `cursor-agent`, `glm`, `kimi`, `grok`, `antigravity`, `gemini`, `opencode` |
 
 *Required when not using --list
 
@@ -415,8 +424,11 @@ Set `GLM_API_KEY` to your Z.ai token. `CLI_API_KEY` remains available as a compa
 **Kimi:**
 Install Claude Code and set `KIMI_API_KEY` to your Kimi API key. `CLI_API_KEY` remains available as a compatibility fallback (see [Kimi](#kimi)).
 
+**Google Antigravity:**
+Run `agy` once to authenticate before using the `antigravity` backend.
+
 **Gemini CLI:**
-Set `GEMINI_API_KEY` in the environment to use the `gemini` backend. Google is retiring the free OAuth tier on June 18, 2026.
+Set `GEMINI_API_KEY` in the environment to use the `gemini` backend.
 
 **OpenCode:**
 Install OpenCode and configure a provider and default model. Run `opencode models`
@@ -436,6 +448,7 @@ Install the required CLI:
 - Claude Code: `curl -fsSL https://claude.ai/install.sh | bash`
 - Cursor CLI: `curl https://cursor.com/install -fsS | bash`
 - Grok Build: `curl -fsSL https://x.ai/cli/install.sh | bash`
+- Google Antigravity: `curl -fsSL https://antigravity.google/cli/install.sh | bash`
 - Gemini CLI: `npm install -g @google/gemini-cli`
 - OpenCode: `brew install anomalyco/tap/opencode`
 
@@ -457,7 +470,7 @@ The main agent stays lightweight too. It coordinates work without accumulating a
 
 ### Agent Skills as an Open Standard
 
-This skill uses the [Agent Skills](https://agentskills.io) format for packaging reusable AI agent capabilities as portable files. Codex, Claude Code, Cursor CLI, Grok Build, Gemini CLI, and [30+ other tools](https://agentskills.io) support the format, so the same skill can be used across these environments.
+This skill uses the [Agent Skills](https://agentskills.io) format for packaging reusable AI agent capabilities as portable files. Codex, Claude Code, Cursor CLI, Grok Build, Google Antigravity, Gemini CLI, and [30+ other tools](https://agentskills.io) support the format, so the same skill can be used across these environments.
 
 ## How It Works
 
