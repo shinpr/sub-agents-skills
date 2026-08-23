@@ -61,10 +61,7 @@ class TestBuildCommand:
         assert args == ["--output-format", "json", "-p", "test prompt"]
 
     def test_cursor_argv_never_carries_api_key(self):
-        """Even with CLI_API_KEY set, the secret must not appear in argv.
-
-        Forwarding happens via env (CURSOR_API_KEY), see TestBuildInvocationArgs.
-        """
+        """Even with CLI_API_KEY set, the secret must not appear in argv."""
         with patch.dict("os.environ", {"CLI_API_KEY": "test-key"}):
             cmd, args = build_command("cursor-agent", "test prompt")
             assert "--api-key" not in args
@@ -279,14 +276,14 @@ class TestBuildInvocationArgs:
         assert "Agent definition" in prompt_arg
         assert process.env_override is None
 
-    def test_cursor_passes_api_key_via_env_not_argv(self):
+    def test_cursor_removes_legacy_api_key_instead_of_forwarding_it(self):
         with patch.dict("os.environ", {"CLI_API_KEY": "sk-secret"}, clear=True):
             process = build_invocation_args(_inv("cursor-agent"))
         assert process.command == "cursor-agent"
         assert "sk-secret" not in process.args
         assert "--api-key" not in process.args
         assert "-a" not in process.args
-        assert process.env_override == {"CURSOR_API_KEY": "sk-secret"}
+        assert process.env_override == {"CLI_API_KEY": None}
 
     def test_cursor_prefers_provider_specific_api_key(self):
         with patch.dict(
@@ -295,12 +292,15 @@ class TestBuildInvocationArgs:
             clear=True,
         ):
             process = build_invocation_args(_inv("cursor-agent"))
-        assert process.env_override == {"CURSOR_API_KEY": "cursor-secret"}
+        assert process.env_override == {
+            "CURSOR_API_KEY": "cursor-secret",
+            "CLI_API_KEY": None,
+        }
         assert "cursor-secret" not in process.args
         assert "legacy-secret" not in process.args
 
     def test_glm_uses_replace_system_prompt_and_injects_zai_env(self):
-        with patch.dict("os.environ", {"CLI_API_KEY": "zai-secret"}, clear=True):
+        with patch.dict("os.environ", {"GLM_API_KEY": "zai-secret"}, clear=True):
             process = build_invocation_args(_inv("glm"))
         assert process.command == "claude"
         # Full replace, NOT append — GLM runs on the agent def alone.
@@ -319,6 +319,7 @@ class TestBuildInvocationArgs:
             "ANTHROPIC_BASE_URL": "https://api.z.ai/api/anthropic",
             "ANTHROPIC_AUTH_TOKEN": "zai-secret",
             "ANTHROPIC_API_KEY": None,
+            "CLI_API_KEY": None,
         }
         assert "zai-secret" not in process.args
 
@@ -327,7 +328,7 @@ class TestBuildInvocationArgs:
         # override marks it for removal (None) so it never reaches Z.ai.
         with patch.dict(
             "os.environ",
-            {"CLI_API_KEY": "zai-secret", "ANTHROPIC_API_KEY": "sk-ant-real"},
+            {"GLM_API_KEY": "zai-secret", "ANTHROPIC_API_KEY": "sk-ant-real"},
             clear=True,
         ):
             process = build_invocation_args(_inv("glm"))
@@ -342,22 +343,31 @@ class TestBuildInvocationArgs:
         ):
             process = build_invocation_args(_inv("glm"))
         assert process.env_override["ANTHROPIC_AUTH_TOKEN"] == "zai-primary"
+        assert process.env_override["CLI_API_KEY"] is None
         assert "zai-primary" not in process.args
         assert "legacy-secret" not in process.args
 
-    @pytest.mark.parametrize(
-        "env",
-        [
-            {},
-            {"GLM_API_KEY": "   ", "CLI_API_KEY": "   "},
-        ],
-    )
+    @pytest.mark.parametrize("legacy_value", ["legacy-secret", ""])
+    def test_glm_legacy_api_key_raises_migration_guidance_without_exposing_value(
+        self, legacy_value
+    ):
+        with patch.dict("os.environ", {"CLI_API_KEY": legacy_value}, clear=True):
+            with pytest.raises(ValueError) as exc_info:
+                build_invocation_args(_inv("glm"))
+        assert str(exc_info.value) == (
+            "GLM configuration error: CLI_API_KEY is set but no longer supported. "
+            "Set GLM_API_KEY to a valid Z.ai API token and retry."
+        )
+        if legacy_value:
+            assert legacy_value not in str(exc_info.value)
+
+    @pytest.mark.parametrize("env", [{}, {"GLM_API_KEY": "   "}])
     def test_glm_missing_key_raises_actionable_config_error(self, env):
         with patch.dict("os.environ", env, clear=True):
             with pytest.raises(ValueError) as exc_info:
                 build_invocation_args(_inv("glm"))
         assert str(exc_info.value) == (
-            "GLM configuration error: GLM_API_KEY and CLI_API_KEY are unset or blank. "
+            "GLM configuration error: GLM_API_KEY is unset or blank. "
             "A Z.ai API token is required before retrying."
         )
 
@@ -376,6 +386,7 @@ class TestBuildInvocationArgs:
             "ANTHROPIC_BASE_URL": "https://api.kimi.com/coding/",
             "ANTHROPIC_API_KEY": "kimi-secret",
             "ANTHROPIC_AUTH_TOKEN": None,
+            "CLI_API_KEY": None,
         }
         assert "kimi-secret" not in process.args
 
@@ -392,32 +403,35 @@ class TestBuildInvocationArgs:
             process = build_invocation_args(_inv("kimi"))
         assert process.env_override["ANTHROPIC_API_KEY"] == "kimi-primary"
         assert process.env_override["ANTHROPIC_AUTH_TOKEN"] is None
+        assert process.env_override["CLI_API_KEY"] is None
         assert "kimi-primary" not in process.args
         assert "legacy-secret" not in process.args
 
-    def test_kimi_falls_back_to_legacy_cli_api_key(self):
+    @pytest.mark.parametrize("legacy_value", ["legacy-secret", ""])
+    def test_kimi_legacy_api_key_raises_migration_guidance_without_exposing_value(
+        self, legacy_value
+    ):
         with patch.dict(
             "os.environ",
-            {"KIMI_API_KEY": "   ", "CLI_API_KEY": "legacy-secret"},
+            {"KIMI_API_KEY": "   ", "CLI_API_KEY": legacy_value},
             clear=True,
         ):
-            process = build_invocation_args(_inv("kimi"))
-        assert process.env_override["ANTHROPIC_API_KEY"] == "legacy-secret"
-        assert "legacy-secret" not in process.args
+            with pytest.raises(ValueError) as exc_info:
+                build_invocation_args(_inv("kimi"))
+        assert str(exc_info.value) == (
+            "Kimi configuration error: CLI_API_KEY is set but no longer supported. "
+            "Set KIMI_API_KEY to a valid Kimi API key and retry."
+        )
+        if legacy_value:
+            assert legacy_value not in str(exc_info.value)
 
-    @pytest.mark.parametrize(
-        "env",
-        [
-            {},
-            {"KIMI_API_KEY": "   ", "CLI_API_KEY": "   "},
-        ],
-    )
+    @pytest.mark.parametrize("env", [{}, {"KIMI_API_KEY": "   "}])
     def test_kimi_missing_key_raises_actionable_config_error(self, env):
         with patch.dict("os.environ", env, clear=True):
             with pytest.raises(ValueError) as exc_info:
                 build_invocation_args(_inv("kimi"))
         assert str(exc_info.value) == (
-            "Kimi configuration error: KIMI_API_KEY and CLI_API_KEY are unset or blank. "
+            "Kimi configuration error: KIMI_API_KEY is unset or blank. "
             "A Kimi API key is required before retrying."
         )
 

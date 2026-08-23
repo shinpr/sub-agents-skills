@@ -127,6 +127,78 @@ class TestBuildFinalResponse:
         assert r["status"] == "error"
         assert r["error"] == "Authentication required"
 
+    def test_cursor_auth_error_with_legacy_key_returns_migration_guidance(self):
+        with patch.dict("os.environ", {"CLI_API_KEY": "legacy-secret"}, clear=True):
+            r = build_final_response(
+                "cursor-agent",
+                1,
+                {"result": "Authentication required", "status": "error"},
+                [],
+                "",
+            )
+
+        assert r["error"] == (
+            "Cursor authentication error: CLI_API_KEY is set but no longer supported. "
+            "Run `cursor-agent login` or set CURSOR_API_KEY, then retry."
+        )
+        assert "legacy-secret" not in r["error"]
+
+    def test_cursor_auth_error_in_unparsed_stdout_returns_migration_guidance(self):
+        with patch.dict("os.environ", {"CLI_API_KEY": "legacy-secret"}, clear=True):
+            r = build_final_response(
+                "cursor-agent",
+                1,
+                None,
+                ['{"error":"You are not logged in"}\n'],
+                "",
+            )
+
+        assert r["error"] == (
+            "Cursor authentication error: CLI_API_KEY is set but no longer supported. "
+            "Run `cursor-agent login` or set CURSOR_API_KEY, then retry."
+        )
+
+    def test_cursor_non_auth_error_keeps_original_error_with_legacy_key(self):
+        with patch.dict("os.environ", {"CLI_API_KEY": "legacy-secret"}, clear=True):
+            r = build_final_response(
+                "cursor-agent",
+                1,
+                {"result": "Model is unavailable", "status": "error"},
+                [],
+                "",
+            )
+
+        assert r["error"] == "Model is unavailable"
+
+    def test_cursor_non_auth_error_ignores_auth_phrases_in_structured_result(self):
+        with patch.dict("os.environ", {"CLI_API_KEY": "legacy-secret"}, clear=True):
+            r = build_final_response(
+                "cursor-agent",
+                1,
+                {
+                    "result": "Investigating an unauthorized response",
+                    "error": "Model is unavailable",
+                    "status": "error",
+                },
+                [],
+                "",
+            )
+
+        assert r["error"] == "Model is unavailable"
+
+    def test_cursor_explicit_key_auth_error_does_not_blame_legacy_key(self):
+        env = {"CURSOR_API_KEY": "cursor-secret", "CLI_API_KEY": "legacy-secret"}
+        with patch.dict("os.environ", env, clear=True):
+            r = build_final_response(
+                "cursor-agent",
+                1,
+                {"result": "Invalid API key", "status": "error"},
+                [],
+                "",
+            )
+
+        assert r["error"] == "Invalid API key"
+
 
 class TestExecuteAgent:
     def test_returns_error_when_cli_executable_not_found(self):
@@ -246,6 +318,7 @@ class TestExecuteAgent:
         assert child_env["ANTHROPIC_BASE_URL"] == "https://api.kimi.com/coding/"
         assert child_env["ANTHROPIC_API_KEY"] == "kimi-primary"
         assert "ANTHROPIC_AUTH_TOKEN" not in child_env
+        assert "CLI_API_KEY" not in child_env
         assert result["status"] == "success"
         assert result["result"] == "DONE"
 

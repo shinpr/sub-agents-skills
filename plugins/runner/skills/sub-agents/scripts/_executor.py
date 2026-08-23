@@ -15,6 +15,40 @@ from _stream import StreamProcessor
 # SIGTERM may be reported as 143 or -15.
 _SUCCESS_EXIT_CODES = (0, 143, -15)
 
+_CURSOR_AUTH_ERROR_PHRASES = (
+    "authentication required",
+    "authentication failed",
+    "not authenticated",
+    "not logged in",
+    "unauthenticated",
+    "unauthorized",
+    "please log in",
+    "please login",
+)
+
+
+def _cursor_legacy_key_guidance(error: str) -> str | None:
+    """Give the calling LLM migration guidance when legacy config explains auth failure."""
+    if "CLI_API_KEY" not in os.environ:
+        return None
+
+    cursor_api_key = os.environ.get("CURSOR_API_KEY")
+    if cursor_api_key and cursor_api_key.strip():
+        return None
+
+    normalized_error = error.lower()
+    is_auth_error = any(phrase in normalized_error for phrase in _CURSOR_AUTH_ERROR_PHRASES) or (
+        "api key" in normalized_error
+        and any(word in normalized_error for word in ("invalid", "missing", "rejected"))
+    )
+    if not is_auth_error:
+        return None
+
+    return (
+        "Cursor authentication error: CLI_API_KEY is set but no longer supported. "
+        "Run `cursor-agent login` or set CURSOR_API_KEY, then retry."
+    )
+
 
 def _partial_response(cli: str, result: dict | None, exit_code: int, error: str) -> dict:
     return {
@@ -82,6 +116,11 @@ def build_final_response(
             msg = f"CLI exited with code {exit_code}"
         if stderr and stderr.strip():
             msg += f": {stderr.strip()}"
+        if cli == "cursor-agent":
+            error_context = msg
+            if result is None:
+                error_context += f"\n{response['result'][:8192]}"
+            msg = _cursor_legacy_key_guidance(error_context) or msg
         response["error"] = msg
     return response
 

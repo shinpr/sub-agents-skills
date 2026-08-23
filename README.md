@@ -353,8 +353,7 @@ export GLM_API_KEY=<your-z.ai-token>
 ```
 
 The runner sends the key through the child environment and points Claude Code
-at `https://api.z.ai/api/anthropic`. `CLI_API_KEY` remains supported as a
-fallback.
+at `https://api.z.ai/api/anthropic`.
 
 </details>
 
@@ -370,8 +369,7 @@ export KIMI_API_KEY=<your-kimi-api-key>
 ```
 
 The runner sends the key through the child environment and points Claude Code
-at `https://api.kimi.com/coding/`. `CLI_API_KEY` remains supported as a
-fallback.
+at `https://api.kimi.com/coding/`.
 
 Provider-specific keys take priority, so multiple backends can remain
 configured at the same time:
@@ -464,13 +462,13 @@ therefore has its own startup cost.
 Make sure the CLI is installed and accessible in your `PATH`.
 
 **Cursor CLI:**
-Run `cursor-agent login` to authenticate, or set `CURSOR_API_KEY`. `CLI_API_KEY` remains available as a compatibility fallback. Sessions can expire, so run the login command again if you see auth errors.
+Run `cursor-agent login` to authenticate, or set `CURSOR_API_KEY`. Sessions can expire, so run the login command again if you see auth errors.
 
 **GLM:**
-Set `GLM_API_KEY` to your Z.ai token. `CLI_API_KEY` remains available as a compatibility fallback (see [GLM (Z.ai)](#glm-zai)).
+Set `GLM_API_KEY` to your Z.ai token (see [GLM (Z.ai)](#glm-zai)).
 
 **Kimi:**
-Install Claude Code and set `KIMI_API_KEY` to your Kimi API key. `CLI_API_KEY` remains available as a compatibility fallback (see [Kimi](#kimi)).
+Install Claude Code and set `KIMI_API_KEY` to your Kimi API key (see [Kimi](#kimi)).
 
 **Google:**
 Run `agy` once to authenticate before using the `antigravity` backend.
