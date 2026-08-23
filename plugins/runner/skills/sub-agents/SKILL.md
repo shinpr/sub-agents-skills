@@ -102,6 +102,9 @@ Parse JSON output and check `status` field:
 For configuration or credential errors, retry after the required external
 configuration has changed.
 
+If execution fails because `run-agent` is missing, retry with `--cli` set to
+the current client's backend.
+
 **By exit_code** (when status is `error`):
 
 | exit_code | Meaning | Resolution |
@@ -142,7 +145,8 @@ What this agent does.
 How results should be structured.
 ```
 
-`run-agent` supplies the backend; an explicit `--cli` argument overrides it.
+`run-agent` supplies the backend. Pass `--cli` only as an explicit one-run
+override; execution fails with a corrective error when neither is specified.
 
 **Frontmatter fields:**
 

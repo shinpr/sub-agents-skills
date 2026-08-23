@@ -291,7 +291,7 @@ One-sentence purpose.
 | `effort` | Backend/model-specific value (optional) | Reasoning-effort override; omit to use the backend/model default |
 | `permission` | `read-only`, `safe-edit` (default), `yolo` | Approval/sandbox level the sub-agent runs with |
 
-If `run-agent` is not specified, the skill auto-detects the caller environment or defaults to `codex`.
+`run-agent` is required unless `--cli` explicitly overrides it for one run.
 
 `effort` is an advanced option whose accepted values depend on both the backend
 and model. The runner treats the value as opaque and forwards it unchanged to
@@ -374,12 +374,11 @@ To customize: `export SUB_AGENTS_DIR=/custom/path`
 
 ### CLI Selection Priority
 
-1. `--cli` argument (explicit override)
+1. `--cli` argument (explicit one-run override)
 2. Agent definition `run-agent` frontmatter
-3. Auto-detect caller environment
-4. Default: `codex`
+3. Error if neither is specified
 
-`--cli` always overrides the agent definition's `run-agent`.
+`--cli` always overrides the agent definition's `run-agent`; omit it for normal runs.
 
 ### Script Parameters
 

@@ -14,7 +14,6 @@ from _builder import AgentInvocation  # noqa: E402
 from _constants import DEFAULT_TIMEOUT_MS, SUPPORTED_CLIS_HELP  # noqa: E402
 from _executor import execute_agent  # noqa: E402
 from _loader import get_agents_dir, list_agents, load_agent  # noqa: E402
-from _resolver import resolve_cli  # noqa: E402
 
 
 def _print_error(error: str, exit_code: int = 1, cli: str | None = None) -> None:
@@ -71,7 +70,12 @@ def main() -> None:
         _print_error(str(e))
         sys.exit(1)
 
-    cli = args.cli or resolve_cli(agent.run_agent)
+    cli = args.cli or agent.run_agent
+    if not cli:
+        _print_error(
+            "No backend selected. Set `run-agent` in the agent definition or pass `--cli`."
+        )
+        sys.exit(1)
     invocation = AgentInvocation(
         cli=cli,
         prompt=args.prompt,

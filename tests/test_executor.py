@@ -691,6 +691,54 @@ class TestMainEndToEnd:
             assert payload["cli"] == "codex"
             assert code == 0
 
+    def test_main_cli_argument_supplies_missing_agent_backend(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            agents_dir = Path(tmpdir) / ".agents"
+            agents_dir.mkdir()
+            (agents_dir / "echo.md").write_text("# Echo\n")
+            argv = [
+                "run_subagent.py",
+                "--agent",
+                "echo",
+                "--prompt",
+                "x",
+                "--cwd",
+                tmpdir,
+                "--cli",
+                "codex",
+            ]
+            success = {"result": "ok", "exit_code": 0, "status": "success", "cli": "codex"}
+            with patch("run_subagent.execute_agent", return_value=success) as execute:
+                stdout, code = self._run(argv, MagicMock())
+            invocation = execute.call_args.args[0]
+            assert invocation.cli == "codex"
+            assert json.loads(stdout)["cli"] == "codex"
+            assert code == 0
+
+    def test_main_requires_agent_backend_or_cli_argument(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            agents_dir = Path(tmpdir) / ".agents"
+            agents_dir.mkdir()
+            (agents_dir / "echo.md").write_text("# Echo\n")
+            argv = [
+                "run_subagent.py",
+                "--agent",
+                "echo",
+                "--prompt",
+                "x",
+                "--cwd",
+                tmpdir,
+            ]
+            with patch("run_subagent.execute_agent") as execute:
+                stdout, code = self._run(argv, MagicMock())
+            payload = json.loads(stdout)
+            assert payload["status"] == "error"
+            assert payload["error"] == (
+                "No backend selected. Set `run-agent` in the agent definition or pass `--cli`."
+            )
+            assert code == 1
+            execute.assert_not_called()
+
     def test_main_invalid_permission_returns_one(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             agents_dir = Path(tmpdir) / ".agents"
