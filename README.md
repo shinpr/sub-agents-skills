@@ -8,7 +8,7 @@
 
 Run task-specific agents on different AI coding backends from one parent tool.
 
-Use Codex, Claude Code, Cursor CLI, GLM, Kimi, Grok Build, Google Antigravity, Gemini CLI, and OpenCode as sub-agents in one workflow. Agent definitions are Markdown files, and each agent can select its execution backend.
+Use Codex, Claude Code, Cursor CLI, GLM, Kimi, Grok Build, Google Antigravity, and OpenCode as sub-agents in one workflow. Agent definitions are Markdown files, and each agent can select its execution backend. Gemini CLI remains available if you already use it.
 
 ```mermaid
 graph LR
@@ -19,8 +19,8 @@ graph LR
     B --> H["Grok Build"]
     B --> G["GLM"]
     B --> K["Kimi"]
-    B --> F["Google Antigravity"]
-    B --> GM["Gemini CLI"]
+    B --> F["Google Antigravity<br/>(Gemini models)"]
+    B -.-> GM["Gemini CLI<br/>(alternative)"]
     B --> I["OpenCode"]
     I --> J["Configured provider/model<br/>(API · gateway · local)"]
     style B fill:#f5f5f5,stroke:#333
@@ -33,7 +33,7 @@ Most AI coding tools provide sub-agents tied to their own models. Claude Code de
 This skill lets each agent select a supported backend:
 
 - **Backend selection per task:** Choose Codex for a quick edit, Claude Code for a deeper pass, or another supported backend for a separate implementation pass.
-- **Portable definitions:** Plain Markdown agent files work with Codex, Claude Code, Cursor CLI, GLM, Kimi, Grok Build, Antigravity, Gemini CLI, VS Code, and [30+ other tools](https://agentskills.io) that support the Agent Skills format.
+- **Portable definitions:** Plain Markdown agent files work with Codex, Claude Code, Cursor CLI, GLM, Kimi, Grok Build, Google Antigravity, VS Code, and [30+ other tools](https://agentskills.io) that support the Agent Skills format.
 - **Direct provider billing:** Choose which model handles each task and pay the provider at its API rates.
 - **Shared configuration:** Use the same agent definitions across a team with different IDEs or preferred LLMs.
 
@@ -50,10 +50,9 @@ Each agent definition specifies which CLI runs it via the `run-agent` frontmatte
 | **Kimi** | `claude` (Kimi endpoint) | Uses the Claude Code binary (see below) |
 | **Grok Build** (SpaceX AI) | `grok` | `curl -fsSL https://x.ai/cli/install.sh \| bash` |
 | **Antigravity** (Google) | `agy` | `curl -fsSL https://antigravity.google/cli/install.sh \| bash` |
-| **Gemini CLI** (Google) | `gemini` | `npm install -g @google/gemini-cli` |
 | **OpenCode** | `opencode` | `brew install anomalyco/tap/opencode` |
 
-You only need to install the backends you plan to use. Antigravity CLI 1.1.12 or later is required. Antigravity is the primary Google backend; existing Gemini CLI installations remain supported through `run-agent: gemini`.
+You only need to install the backends you plan to use. For Google models, use Antigravity CLI 1.1.12 or later. Existing Gemini CLI installations continue to work with `run-agent: gemini`.
 
 ### GLM (Z.ai)
 
@@ -152,7 +151,7 @@ grok plugin install runner --trust
 agy plugin install https://github.com/shinpr/sub-agents-skills/tree/main/plugins/runner
 ```
 
-**Other clients (Cursor CLI, Gemini CLI, VS Code, etc.):**
+**Other clients (Cursor CLI, VS Code, etc.):**
 
 Use the install script to copy the skill into the client's skill path:
 
@@ -160,11 +159,11 @@ Use the install script to copy the skill into the client's skill path:
 # Cursor
 curl -fsSL https://raw.githubusercontent.com/shinpr/sub-agents-skills/main/install.sh | bash -s -- --target ~/.cursor/skills
 
-# Gemini
-curl -fsSL https://raw.githubusercontent.com/shinpr/sub-agents-skills/main/install.sh | bash -s -- --target ~/.gemini/skills
-
 # VS Code / Copilot (project-scoped)
 curl -fsSL https://raw.githubusercontent.com/shinpr/sub-agents-skills/main/install.sh | bash -s -- --target .github/skills
+
+# Gemini CLI
+curl -fsSL https://raw.githubusercontent.com/shinpr/sub-agents-skills/main/install.sh | bash -s -- --target ~/.gemini/skills
 ```
 
 Or clone manually:
@@ -213,10 +212,11 @@ Sub-agents may fail to execute shell commands with permission errors. This happe
    claude          # For Claude Code users
    cursor-agent    # For Cursor CLI users
    grok            # For Grok Build users
-   agy             # For Google Antigravity users
-   gemini          # Gemini CLI also remains supported
+   agy             # For Google models
    opencode        # For OpenCode users
    ```
+
+   For an agent configured with `run-agent: gemini`, run `gemini` instead.
 
 2. When prompted to allow commands (e.g., "Add Shell(cd), Shell(make) to allowlist?"), approve them
 
@@ -424,11 +424,9 @@ Set `GLM_API_KEY` to your Z.ai token. `CLI_API_KEY` remains available as a compa
 **Kimi:**
 Install Claude Code and set `KIMI_API_KEY` to your Kimi API key. `CLI_API_KEY` remains available as a compatibility fallback (see [Kimi](#kimi)).
 
-**Google Antigravity:**
+**Google:**
 Run `agy` once to authenticate before using the `antigravity` backend.
-
-**Gemini CLI:**
-Set `GEMINI_API_KEY` in the environment to use the `gemini` backend.
+If you use the Gemini CLI backend instead, set `GEMINI_API_KEY` in the environment.
 
 **OpenCode:**
 Install OpenCode and configure a provider and default model. Run `opencode models`
@@ -449,8 +447,9 @@ Install the required CLI:
 - Cursor CLI: `curl https://cursor.com/install -fsS | bash`
 - Grok Build: `curl -fsSL https://x.ai/cli/install.sh | bash`
 - Google Antigravity: `curl -fsSL https://antigravity.google/cli/install.sh | bash`
-- Gemini CLI: `npm install -g @google/gemini-cli`
 - OpenCode: `brew install anomalyco/tap/opencode`
+
+If you use Gemini CLI, install it with `npm install -g @google/gemini-cli`.
 
 ### Other execution errors
 
@@ -470,7 +469,7 @@ The main agent stays lightweight too. It coordinates work without accumulating a
 
 ### Agent Skills as an Open Standard
 
-This skill uses the [Agent Skills](https://agentskills.io) format for packaging reusable AI agent capabilities as portable files. Codex, Claude Code, Cursor CLI, Grok Build, Google Antigravity, Gemini CLI, and [30+ other tools](https://agentskills.io) support the format, so the same skill can be used across these environments.
+This skill uses the [Agent Skills](https://agentskills.io) format for packaging reusable AI agent capabilities as portable files. Codex, Claude Code, Cursor CLI, Grok Build, Google Antigravity, and [30+ other tools](https://agentskills.io) support the format, so the same skill can be used across these environments.
 
 ## How It Works
 
