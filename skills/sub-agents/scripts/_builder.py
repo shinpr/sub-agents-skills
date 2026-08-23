@@ -51,6 +51,9 @@ def build_command(cli: str, prompt: str) -> tuple[str, list[str]]:
         # Headless Gemini otherwise prompts for folder trust.
         return "gemini", ["--skip-trust", "--output-format", "stream-json", "-p", prompt]
 
+    if cli == "antigravity":
+        return "agy", ["--output-format", "stream-json", "-p", prompt]
+
     if cli == "grok":
         return "grok", [
             "--output-format",
@@ -86,6 +89,12 @@ _GEMINI_PERMISSIONS = {
     "read-only": ("--approval-mode", "plan"),
     "safe-edit": ("--approval-mode", "auto_edit"),
     "yolo": ("-y",),
+}
+
+_ANTIGRAVITY_PERMISSIONS = {
+    "read-only": ("--mode", "plan", "--sandbox"),
+    "safe-edit": ("--mode", "accept-edits", "--sandbox"),
+    "yolo": ("--dangerously-skip-permissions",),
 }
 
 _CURSOR_PERMISSIONS = {
@@ -174,7 +183,7 @@ def _build_gemini_args(inv: AgentInvocation) -> ProcessInvocation:
     return _concatenated_args(inv, perm, env=None)
 
 
-def _build_codex_args(inv: AgentInvocation) -> ProcessInvocation:
+def _build_concatenated_args(inv: AgentInvocation) -> ProcessInvocation:
     perm = _invocation_flags(inv)
     return _concatenated_args(inv, perm, env=None)
 
@@ -277,12 +286,13 @@ def _build_cursor_args(inv: AgentInvocation) -> ProcessInvocation:
 
 
 _BACKEND_SPECS = {
-    "codex": BackendSpec(_build_codex_args, _CODEX_PERMISSIONS, "model_reasoning_effort"),
+    "codex": BackendSpec(_build_concatenated_args, _CODEX_PERMISSIONS, "model_reasoning_effort"),
     "claude": BackendSpec(_build_claude_args, _CLAUDE_PERMISSIONS, "--effort"),
     "cursor-agent": BackendSpec(_build_cursor_args, _CURSOR_PERMISSIONS, None),
     "glm": BackendSpec(_build_glm_args, _CLAUDE_PERMISSIONS, "--effort"),
     "kimi": BackendSpec(_build_kimi_args, _CLAUDE_PERMISSIONS, "--effort"),
     "grok": BackendSpec(_build_grok_args, _GROK_PERMISSIONS, "--reasoning-effort"),
+    "antigravity": BackendSpec(_build_concatenated_args, _ANTIGRAVITY_PERMISSIONS, "--effort"),
     "gemini": BackendSpec(_build_gemini_args, _GEMINI_PERMISSIONS, None),
     "opencode": BackendSpec(_build_opencode_args, _OPENCODE_PERMISSIONS, "--variant"),
 }

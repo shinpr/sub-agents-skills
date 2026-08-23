@@ -59,6 +59,44 @@ class TestStreamProcessor:
         result = processor.get_result()
         assert result["result"] == "part1part2"
 
+    def test_antigravity_stream(self):
+        processor = StreamProcessor("antigravity")
+        assert not processor.process_line('{"event":"init","conversation_id":"c1"}')
+        assert not processor.process_line(
+            '{"event":"step_update","step_update":{"text_delta":"part1"}}'
+        )
+        assert processor.process_line(
+            '{"event":"result","result":{"status":"SUCCESS","response":"done"}}'
+        )
+        result = processor.get_result()
+        assert result["result"] == "done"
+        assert result["status"] == "success"
+
+    def test_antigravity_error(self):
+        processor = StreamProcessor("antigravity")
+        assert processor.process_line(
+            '{"event":"result","result":{"status":"ERROR","response":"",'
+            '"error":"authentication required"}}'
+        )
+        result = processor.get_result()
+        assert result["status"] == "error"
+        assert result["error"] == "authentication required"
+
+    @pytest.mark.parametrize("status", ["CANCELED", "INTERRUPTED", "WAITING", "RUNNING"])
+    def test_antigravity_incomplete_status_is_partial(self, status):
+        processor = StreamProcessor("antigravity")
+        assert processor.process_line(
+            json.dumps({"event": "result", "result": {"status": status, "response": "progress"}})
+        )
+        assert processor.get_result()["status"] == "partial"
+
+    def test_antigravity_invalid_status_is_error(self):
+        processor = StreamProcessor("antigravity")
+        assert processor.process_line(
+            '{"event":"result","result":{"status":"INVALID","response":""}}'
+        )
+        assert processor.get_result()["status"] == "error"
+
     def test_codex_stream(self):
         processor = StreamProcessor("codex")
         assert not processor.process_line('{"type": "thread.started"}')

@@ -8,6 +8,7 @@ SUPPORTED_CLIS = (
     "glm",
     "kimi",
     "grok",
+    "antigravity",
     "gemini",
     "opencode",
 )
