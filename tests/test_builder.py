@@ -507,8 +507,17 @@ class TestPermissionFlags:
         assert permission_flags("antigravity", "yolo") == ["--dangerously-skip-permissions"]
 
     def test_cursor_flags(self):
-        assert permission_flags("cursor-agent", "read-only") == ["--mode", "plan"]
-        assert permission_flags("cursor-agent", "safe-edit") == ["--trust"]
+        assert permission_flags("cursor-agent", "read-only") == [
+            "--mode",
+            "plan",
+            "--sandbox",
+            "enabled",
+        ]
+        assert permission_flags("cursor-agent", "safe-edit") == [
+            "--trust",
+            "--sandbox",
+            "enabled",
+        ]
         assert permission_flags("cursor-agent", "yolo") == ["-f", "--trust"]
 
     def test_grok_flags(self):
@@ -593,17 +602,19 @@ class TestPermissionAppliedToCommand:
         idx = process.args.index("--approval-mode")
         assert process.args[idx + 1] == "plan"
 
-    def test_cursor_safe_edit_in_args(self):
+    @pytest.mark.parametrize("permission", ["read-only", "safe-edit"])
+    def test_cursor_non_yolo_modes_enable_sandbox(self, permission):
         process = build_invocation_args(
             AgentInvocation(
                 cli="cursor-agent",
                 prompt="Task",
                 cwd="/test/cwd",
                 system_context="Agent",
-                permission="safe-edit",
+                permission=permission,
             )
         )
-        assert "--trust" in process.args
+        sandbox_idx = process.args.index("--sandbox")
+        assert process.args[sandbox_idx + 1] == "enabled"
 
     def test_grok_safe_edit_in_args(self):
         process = build_invocation_args(

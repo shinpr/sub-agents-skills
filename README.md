@@ -220,13 +220,14 @@ field.
 
 **Permission levels:**
 
-- `read-only`: investigation/review only, no edits or shell writes (codex `-s read-only` / claude `--permission-mode plan` / cursor `--mode plan` / grok `--sandbox read-only` / antigravity `--mode plan --sandbox` / gemini `--approval-mode plan` / OpenCode permission deny rules)
-- `safe-edit`: default non-interactive edit mode (codex `-s workspace-write` + `approval_policy=never` / claude `--permission-mode acceptEdits` / cursor `--trust` / grok `--sandbox workspace` / antigravity `--mode accept-edits --sandbox` / gemini `--approval-mode auto_edit` / OpenCode permission rules)
+- `read-only`: investigation/review only, no edits or shell writes (codex `-s read-only` / claude `--permission-mode plan` / cursor `--mode plan --sandbox enabled` / grok `--sandbox read-only` / antigravity `--mode plan --sandbox` / gemini `--approval-mode plan` / OpenCode permission deny rules)
+- `safe-edit`: default non-interactive edit mode (codex `-s workspace-write` + `approval_policy=never` / claude `--permission-mode acceptEdits` / cursor `--trust --sandbox enabled` / grok `--sandbox workspace` / antigravity `--mode accept-edits --sandbox` / gemini `--approval-mode auto_edit` / OpenCode permission rules)
 - `yolo`: bypass all approvals and sandboxing; use it only for tasks and environments you trust.
 
 Sub-agents have no stdin, so the runner uses non-interactive backend modes. The
 isolation guarantees depend on the selected CLI; permission flags are not
-equivalent across backends.
+equivalent across backends. For Cursor, the sandbox confines supported shell
+commands, while `--mode plan` supplies the read-only constraint.
 
 </details>
 
