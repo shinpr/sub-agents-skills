@@ -427,8 +427,9 @@ graph LR
     B --> F["Google Antigravity<br/>(Gemini 模型)"]
     B -.-> GM["Gemini CLI<br/>(兼容模式)"]
     B --> I["OpenCode"]
-    I --> J["已配置的提供商/模型<br/>(API · 网关 · 本地)"]
     B --> CC["Command Code"]
+    I --> J["所选提供商/模型<br/>(托管 · BYOK · 本地)"]
+    CC --> J
     style B fill:#f5f5f5,stroke:#333
 ```
 

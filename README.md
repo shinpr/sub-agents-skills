@@ -444,8 +444,9 @@ graph LR
     B --> F["Google Antigravity<br/>(Gemini models)"]
     B -.-> GM["Gemini CLI<br/>(compatibility)"]
     B --> I["OpenCode"]
-    I --> J["Configured provider/model<br/>(API · gateway · local)"]
     B --> CC["Command Code"]
+    I --> J["Selected provider/model<br/>(managed · BYOK · local)"]
+    CC --> J
     style B fill:#f5f5f5,stroke:#333
 ```
 
