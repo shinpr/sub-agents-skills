@@ -131,6 +131,49 @@ class TestStreamProcessor:
         assert result["result"] == "truncated"
         assert result["status"] == "partial"
 
+    def test_command_code_success_result(self):
+        processor = StreamProcessor("command-code")
+        assert not processor.process_line(
+            '{"type":"event","event":{"type":"tool_running","toolName":"read_file"}}'
+        )
+        assert processor.process_line(
+            '{"type":"result","subtype":"success","sessionId":"session-1",'
+            '"stopReason":"end_turn","finalText":"DONE","usage":{},"durationMs":12}'
+        )
+        assert processor.get_result() == {
+            "type": "result",
+            "result": "DONE",
+            "status": "success",
+            "stop_reason": "end_turn",
+            "session_id": "session-1",
+        }
+
+    def test_command_code_max_turns_result_is_partial(self):
+        processor = StreamProcessor("command-code")
+        assert processor.process_line(
+            '{"type":"result","subtype":"max_turns","stopReason":"max_turns",'
+            '"finalText":"progress","usage":{},"durationMs":12}'
+        )
+        assert processor.get_result() == {
+            "type": "result",
+            "result": "progress",
+            "status": "partial",
+            "stop_reason": "max_turns",
+        }
+
+    def test_command_code_error_result(self):
+        processor = StreamProcessor("command-code")
+        assert processor.process_line(
+            '{"type":"result","subtype":"error","finalText":"",'
+            '"error":"Not authenticated","usage":{},"durationMs":2}'
+        )
+        assert processor.get_result() == {
+            "type": "result",
+            "result": "",
+            "status": "error",
+            "error": "Not authenticated",
+        }
+
     def test_grok_complete_json_output(self):
         processor = StreamProcessor("grok")
         assert processor.process_complete_output(

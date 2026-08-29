@@ -163,6 +163,32 @@ class StreamProcessor:
         }
         return True
 
+    def _process_command_code_line(self, data: dict) -> bool:
+        if data.get("type") != "result":
+            return False
+
+        subtype = data.get("subtype")
+        if subtype == "success":
+            status = "success"
+        elif subtype == "max_turns":
+            status = "partial"
+        else:
+            status = "error"
+
+        result = {
+            "type": "result",
+            "result": data.get("finalText") if isinstance(data.get("finalText"), str) else "",
+            "status": status,
+        }
+        if isinstance(data.get("stopReason"), str):
+            result["stop_reason"] = data["stopReason"]
+        if isinstance(data.get("sessionId"), str):
+            result["session_id"] = data["sessionId"]
+        if isinstance(data.get("error"), str):
+            result["error"] = data["error"]
+        self.result_json = result
+        return True
+
     def _process_grok_line(self, data: dict) -> bool:
         grok_result = _grok_json_result(data)
         if grok_result is None:
@@ -231,4 +257,5 @@ _LINE_PROCESSORS = {
     "antigravity": StreamProcessor._process_antigravity_line,
     "gemini": StreamProcessor._process_gemini_line,
     "opencode": StreamProcessor._process_opencode_line,
+    "command-code": StreamProcessor._process_command_code_line,
 }

@@ -8,6 +8,10 @@ from dataclasses import dataclass
 from _constants import SUPPORTED_CLIS_HELP, format_concatenated_prompt
 from _loader import DEFAULT_PERMISSION
 
+_COMMAND_CODE_POLICY_MOD = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "command_code_policy.mjs")
+)
+
 
 @dataclass(frozen=True)
 class AgentInvocation:
@@ -66,6 +70,19 @@ def build_command(cli: str, prompt: str) -> tuple[str, list[str]]:
     if cli == "opencode":
         return "opencode", ["run", "--format", "json", "--auto", prompt]
 
+    if cli == "command-code":
+        return "command-code", [
+            "--output-format",
+            "json",
+            "--trust",
+            "--no-session",
+            "--skip-onboarding",
+            "--mod",
+            _COMMAND_CODE_POLICY_MOD,
+            "-p",
+            prompt,
+        ]
+
     if cli == "cursor-agent":
         # Cursor credentials stay out of argv.
         return "cursor-agent", ["--output-format", "json", "-p", prompt]
@@ -116,6 +133,17 @@ _OPENCODE_PERMISSIONS = {
     "read-only": (),
     "safe-edit": (),
     "yolo": (),
+}
+
+_COMMAND_CODE_PERMISSIONS = {
+    "read-only": (
+        "--permission-mode",
+        "plan",
+        "--mod-option",
+        "runner-permission=read-only",
+    ),
+    "safe-edit": ("--yolo", "--mod-option", "runner-permission=safe-edit"),
+    "yolo": ("--yolo", "--mod-option", "runner-permission=yolo"),
 }
 
 
@@ -316,6 +344,7 @@ _BACKEND_SPECS = {
     "antigravity": BackendSpec(_build_concatenated_args, _ANTIGRAVITY_PERMISSIONS, "--effort"),
     "gemini": BackendSpec(_build_gemini_args, _GEMINI_PERMISSIONS, None),
     "opencode": BackendSpec(_build_opencode_args, _OPENCODE_PERMISSIONS, "--variant"),
+    "command-code": BackendSpec(_build_concatenated_args, _COMMAND_CODE_PERMISSIONS, "--effort"),
 }
 
 
