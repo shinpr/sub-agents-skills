@@ -9,7 +9,6 @@ from unittest.mock import patch
 import pytest
 from _builder import (
     _BACKEND_SPECS,
-    _COMMAND_CODE_POLICY_MOD,
     AgentInvocation,
     build_command,
     build_invocation_args,
@@ -112,7 +111,7 @@ class TestBuildCommand:
         assert cmd == "opencode"
         assert args == ["run", "--format", "json", "--auto", "test prompt"]
 
-    def test_command_code_returns_headless_json_command_with_policy_mod(self):
+    def test_command_code_returns_headless_json_command(self):
         cmd, args = build_command("command-code", "test prompt")
         assert cmd == "command-code"
         assert args == [
@@ -121,13 +120,9 @@ class TestBuildCommand:
             "--trust",
             "--no-session",
             "--skip-onboarding",
-            "--mod",
-            _COMMAND_CODE_POLICY_MOD,
             "-p",
             "test prompt",
         ]
-        assert os.path.isabs(_COMMAND_CODE_POLICY_MOD)
-        assert os.path.isfile(_COMMAND_CODE_POLICY_MOD)
 
     def test_unknown_cli_raises_error(self):
         with pytest.raises(ValueError, match="Unsupported CLI"):
@@ -490,33 +485,37 @@ class TestBuildInvocationArgs:
         assert "Agent definition" in process.args[-1]
         assert json.loads(process.env_override["OPENCODE_PERMISSION"]) == expected
 
-    def test_command_code_read_only_uses_plan_with_runner_policy(self):
+    def test_command_code_read_only_uses_plan_mode(self):
         process = build_invocation_args(_inv("command-code", permission="read-only"))
         assert process.command == "command-code"
-        assert process.args[:4] == [
+        assert process.args[:2] == [
             "--permission-mode",
             "plan",
-            "--mod-option",
-            "runner-permission=read-only",
         ]
         assert process.args[-2:] == ["-p", process.args[-1]]
         assert "[System Context]" in process.args[-1]
         assert "Agent definition" in process.args[-1]
         assert process.env_override is None
 
-    @pytest.mark.parametrize("permission", ["safe-edit", "yolo"])
-    def test_command_code_write_modes_use_yolo_with_runner_policy(self, permission):
-        process = build_invocation_args(_inv("command-code", permission=permission))
+    def test_command_code_safe_edit_enables_headless_tools_in_auto_accept_mode(self):
+        process = build_invocation_args(_inv("command-code", permission="safe-edit"))
         assert process.command == "command-code"
         assert process.args[:3] == [
             "--yolo",
-            "--mod-option",
-            f"runner-permission={permission}",
+            "--permission-mode",
+            "auto-accept",
         ]
         assert process.args[-2:] == ["-p", process.args[-1]]
         assert "[System Context]" in process.args[-1]
         assert "Agent definition" in process.args[-1]
         assert process.env_override is None
+
+    def test_command_code_yolo_uses_native_yolo_mode(self):
+        process = build_invocation_args(_inv("command-code", permission="yolo"))
+        assert process.command == "command-code"
+        assert process.args[0] == "--yolo"
+        assert "--permission-mode" not in process.args
+        assert process.args[-2:] == ["-p", process.args[-1]]
 
     def test_unknown_cli_raises(self):
         with pytest.raises(ValueError, match="Unsupported CLI"):
@@ -611,17 +610,17 @@ class TestPermissionFlags:
         assert permission_flags("command-code", "read-only") == [
             "--permission-mode",
             "plan",
-            "--mod-option",
-            "runner-permission=read-only",
         ]
 
-    @pytest.mark.parametrize("permission", ["safe-edit", "yolo"])
-    def test_command_code_write_permissions_select_policy_mode(self, permission):
-        assert permission_flags("command-code", permission) == [
+    def test_command_code_safe_edit_permission_uses_yolo_with_auto_accept(self):
+        assert permission_flags("command-code", "safe-edit") == [
             "--yolo",
-            "--mod-option",
-            f"runner-permission={permission}",
+            "--permission-mode",
+            "auto-accept",
         ]
+
+    def test_command_code_yolo_permission_uses_native_yolo(self):
+        assert permission_flags("command-code", "yolo") == ["--yolo"]
 
     def test_unknown_cli_raises(self):
         """Unknown CLI in permission mapping is a programmer error — fail fast."""
