@@ -428,7 +428,7 @@ graph LR
     B -.-> GM["Gemini CLI<br/>(兼容模式)"]
     B --> I["OpenCode"]
     B --> CC["Command Code"]
-    I --> J["所选提供商/模型<br/>(托管 · BYOK · 本地)"]
+    I --> J["所选提供商/模型<br/>(平台托管 · 自带密钥 · 本地模型)"]
     CC --> J
     style B fill:#f5f5f5,stroke:#333
 ```
