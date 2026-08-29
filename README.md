@@ -173,6 +173,7 @@ Set `run-agent` in each agent definition. The value selects a backend; some back
 | `antigravity` | Google Antigravity | `agy` |
 | `gemini` | Gemini CLI (compatibility) | `gemini` |
 | `opencode` | OpenCode | `opencode` |
+| `command-code` | Command Code | `command-code` |
 
 Install only the CLIs you plan to use. For Google models, prefer Antigravity CLI 1.1.12 or later; existing Gemini CLI configurations remain supported.
 
@@ -208,7 +209,7 @@ One-sentence purpose.
 
 | Field | Values | Description |
 |-------|--------|-------------|
-| `run-agent` | `codex`, `claude`, `cursor-agent`, `glm`, `kimi`, `grok`, `antigravity`, `gemini`, `opencode` | Which backend executes this agent |
+| `run-agent` | `codex`, `claude`, `cursor-agent`, `glm`, `kimi`, `grok`, `antigravity`, `gemini`, `opencode`, `command-code` | Which backend executes this agent |
 | `model` | Backend-specific model name (optional) | Model passed to the selected CLI; omit to use its configured default |
 | `effort` | Backend/model-specific value (optional) | Reasoning-effort override; omit to use the backend/model default |
 | `permission` | `read-only`, `safe-edit` (default), `yolo` | Approval/sandbox level the sub-agent runs with |
@@ -222,8 +223,8 @@ field.
 
 **Permission levels:**
 
-- `read-only`: investigation/review only, no edits or shell writes (codex `-s read-only` / claude `--permission-mode plan` / cursor `--mode plan --sandbox enabled` / grok `--sandbox read-only` / antigravity `--mode plan --sandbox` / gemini `--approval-mode plan` / OpenCode permission deny rules)
-- `safe-edit`: default non-interactive edit mode (codex `-s workspace-write` + `approval_policy=never` / claude `--permission-mode acceptEdits` / cursor `--trust --sandbox enabled` / grok `--sandbox workspace` / antigravity `--mode accept-edits --sandbox` / gemini `--approval-mode auto_edit` / OpenCode permission rules)
+- `read-only`: investigation/review only, no edits or shell writes (codex `-s read-only` / claude `--permission-mode plan` / cursor `--mode plan --sandbox enabled` / grok `--sandbox read-only` / antigravity `--mode plan --sandbox` / gemini `--approval-mode plan` / OpenCode permission deny rules / Command Code plan mode)
+- `safe-edit`: default non-interactive edit mode (codex `-s workspace-write` + `approval_policy=never` / claude `--permission-mode acceptEdits` / cursor `--trust --sandbox enabled` / grok `--sandbox workspace` / antigravity `--mode accept-edits --sandbox` / gemini `--approval-mode auto_edit` / OpenCode and Command Code runner policies)
 - `yolo`: bypass all approvals and sandboxing; use it only for tasks and environments you trust.
 
 Sub-agents have no stdin, so the runner uses non-interactive backend modes. The
@@ -332,7 +333,7 @@ To customize: `export SUB_AGENTS_DIR=/custom/path`
 | `--prompt` | Yes* | Task description to delegate |
 | `--cwd` | Yes* | Working directory (absolute path) |
 | `--timeout` | No | Timeout ms (default: 600000) |
-| `--cli` | No | Force CLI: `codex`, `claude`, `cursor-agent`, `glm`, `kimi`, `grok`, `antigravity`, `gemini`, `opencode` |
+| `--cli` | No | Force CLI: `codex`, `claude`, `cursor-agent`, `glm`, `kimi`, `grok`, `antigravity`, `gemini`, `opencode`, `command-code` |
 
 *Required when not using --list
 
@@ -409,6 +410,16 @@ The runner passes `model` through `--model` and `effort` through OpenCode's
 
 </details>
 
+<a id="command-code"></a>
+<details>
+<summary>Command Code</summary>
+
+Install Command Code and configure a model. Use `command-code login` for
+Command Code-hosted models, and `command-code --list-models` to find model IDs.
+Set `run-agent: command-code`; `model` and `effort` are optional.
+
+</details>
+
 ## Security
 
 Agent definitions are system prompts that control what the sub-agent does. A malicious agent definition could instruct the sub-agent to read sensitive files, execute harmful commands, or exfiltrate data.
@@ -433,7 +444,9 @@ graph LR
     B --> F["Google Antigravity<br/>(Gemini models)"]
     B -.-> GM["Gemini CLI<br/>(compatibility)"]
     B --> I["OpenCode"]
-    I --> J["Configured provider/model<br/>(API · gateway · local)"]
+    B --> CC["Command Code"]
+    I --> J["Selected provider/model<br/>(managed · BYOK · local)"]
+    CC --> J
     style B fill:#f5f5f5,stroke:#333
 ```
 
@@ -480,6 +493,10 @@ If you use the Gemini CLI backend instead, set `GEMINI_API_KEY` in the environme
 Install OpenCode and configure a provider and default model. Run `opencode models`
 and a direct `opencode run --format json` smoke test before using the backend.
 
+**Command Code:**
+Install Command Code and configure a model. Run `command-code status` to check
+authentication before using the backend.
+
 ### Agent not found
 
 Check that:
@@ -496,6 +513,7 @@ Install the required CLI:
 - Grok Build: `curl -fsSL https://x.ai/cli/install.sh | bash`
 - Google Antigravity: `curl -fsSL https://antigravity.google/cli/install.sh | bash`
 - OpenCode: `brew install anomalyco/tap/opencode`
+- Command Code: `npm install -g command-code`
 
 If you use Gemini CLI, install it with `npm install -g @google/gemini-cli`.
 

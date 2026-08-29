@@ -11,6 +11,7 @@ SUPPORTED_CLIS = (
     "antigravity",
     "gemini",
     "opencode",
+    "command-code",
 )
 SUPPORTED_CLIS_HELP = ", ".join(SUPPORTED_CLIS)
 

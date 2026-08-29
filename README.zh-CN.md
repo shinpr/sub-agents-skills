@@ -174,6 +174,7 @@ Sub-Agents Skills 将代理的职责与执行后端分离。Markdown 文件定�
 | `antigravity` | Google Antigravity | `agy` |
 | `gemini` | Gemini CLI（兼容模式） | `gemini` |
 | `opencode` | OpenCode | `opencode` |
+| `command-code` | Command Code | `command-code` |
 
 只需安装实际要使用的 CLI。使用 Google 模型时，建议选择 Antigravity CLI 1.1.12 或更高版本；已有的 Gemini CLI 配置仍然受支持。
 
@@ -210,7 +211,7 @@ permission: safe-edit
 
 | 字段 | 可选值 | 说明 |
 |------|--------|------|
-| `run-agent` | `codex`、`claude`、`cursor-agent`、`glm`、`kimi`、`grok`、`antigravity`、`gemini`、`opencode` | 执行该代理的后端 |
+| `run-agent` | `codex`、`claude`、`cursor-agent`、`glm`、`kimi`、`grok`、`antigravity`、`gemini`、`opencode`、`command-code` | 执行该代理的后端 |
 | `model` | 后端支持的模型名称（可选） | 传给所选 CLI 的模型；省略时使用其已配置的默认值 |
 | `effort` | 后端或模型支持的值（可选） | 覆盖推理强度；省略时使用后端或模型的默认值 |
 | `permission` | `read-only`、`safe-edit`（默认）、`yolo` | 子代理运行时使用的审批与沙箱级别 |
@@ -221,8 +222,8 @@ permission: safe-edit
 
 **权限级别：**
 
-- `read-only`：仅用于调查和审查，不允许编辑文件或通过 shell 写入（codex `-s read-only` / claude `--permission-mode plan` / cursor `--mode plan --sandbox enabled` / grok `--sandbox read-only` / antigravity `--mode plan --sandbox` / gemini `--approval-mode plan` / OpenCode 拒绝写入的权限规则）
-- `safe-edit`：默认的非交互式编辑模式（codex `-s workspace-write` + `approval_policy=never` / claude `--permission-mode acceptEdits` / cursor `--trust --sandbox enabled` / grok `--sandbox workspace` / antigravity `--mode accept-edits --sandbox` / gemini `--approval-mode auto_edit` / OpenCode 对应的权限规则）
+- `read-only`：仅用于调查和审查，不允许编辑文件或通过 shell 写入（codex `-s read-only` / claude `--permission-mode plan` / cursor `--mode plan --sandbox enabled` / grok `--sandbox read-only` / antigravity `--mode plan --sandbox` / gemini `--approval-mode plan` / OpenCode 拒绝写入的权限规则 / Command Code plan 模式）
+- `safe-edit`：默认的非交互式编辑模式（codex `-s workspace-write` + `approval_policy=never` / claude `--permission-mode acceptEdits` / cursor `--trust --sandbox enabled` / grok `--sandbox workspace` / antigravity `--mode accept-edits --sandbox` / gemini `--approval-mode auto_edit` / OpenCode 和 Command Code 的 runner 权限规则）
 - `yolo`：绕过所有审批和沙箱限制；只应在你信任的任务和环境中使用。
 
 子代理没有标准输入，因此 runner 会以非交互模式调用各个后端。不同 CLI 的权限参数并不等价，实际隔离保证取决于所选 CLI。例如，Cursor 的沙箱会将受支持的 shell 命令限制在沙箱内，而 `--mode plan` 则提供只读约束。
@@ -327,7 +328,7 @@ permission: read-only
 | `--prompt` | 是* | 要委派的任务说明 |
 | `--cwd` | 是* | 工作目录（必须是绝对路径） |
 | `--timeout` | 否 | 超时时间，单位为毫秒（默认：600000） |
-| `--cli` | 否 | 强制指定 CLI：`codex`、`claude`、`cursor-agent`、`glm`、`kimi`、`grok`、`antigravity`、`gemini`、`opencode` |
+| `--cli` | 否 | 强制指定 CLI：`codex`、`claude`、`cursor-agent`、`glm`、`kimi`、`grok`、`antigravity`、`gemini`、`opencode`、`command-code` |
 
 \* 不使用 `--list` 时必填
 
@@ -394,6 +395,16 @@ runner 会通过 `--model` 传递 `model`，并通过 OpenCode 的 `--variant` �
 
 </details>
 
+<a id="command-code"></a>
+<details>
+<summary>Command Code</summary>
+
+安装 Command Code 并配置模型。使用 Command Code 托管的模型时运行
+`command-code login`，通过 `command-code --list-models` 查看可用的模型 ID。
+设置 `run-agent: command-code`；`model` 和 `effort` 均为可选项。
+
+</details>
+
 ## 安全说明
 
 代理定义会作为系统提示词，直接控制子代理的行为。恶意代理定义可能会指示子代理读取敏感文件、执行有害命令或将数据泄露到外部。
@@ -416,7 +427,9 @@ graph LR
     B --> F["Google Antigravity<br/>(Gemini 模型)"]
     B -.-> GM["Gemini CLI<br/>(兼容模式)"]
     B --> I["OpenCode"]
-    I --> J["已配置的提供商/模型<br/>(API · 网关 · 本地)"]
+    B --> CC["Command Code"]
+    I --> J["所选提供商/模型<br/>(平台托管 · 自带密钥 · 本地模型)"]
+    CC --> J
     style B fill:#f5f5f5,stroke:#333
 ```
 
@@ -457,6 +470,9 @@ skills/sub-agents/
 **OpenCode：**
 安装 OpenCode，并配置提供商和默认模型。使用前，先运行 `opencode models`，再用 `opencode run --format json` 做一次冒烟测试。
 
+**Command Code：**
+安装 Command Code 并配置模型。使用前运行 `command-code status` 检查身份验证状态。
+
 ### 找不到代理
 
 请检查：
@@ -475,6 +491,7 @@ skills/sub-agents/
 - Grok Build：`curl -fsSL https://x.ai/cli/install.sh | bash`
 - Google Antigravity：`curl -fsSL https://antigravity.google/cli/install.sh | bash`
 - OpenCode：`brew install anomalyco/tap/opencode`
+- Command Code：`npm install -g command-code`
 
 如需使用 Gemini CLI，请通过 `npm install -g @google/gemini-cli` 安装。
 

@@ -577,6 +577,25 @@ class TestExecuteAgent:
         assert result["status"] == "success"
         assert result["result"] == "DONE"
 
+    def test_command_code_ndjson_output_is_parsed(self):
+        mock_process = MagicMock()
+        mock_process.stdout.readline.side_effect = [
+            '{"type":"event","event":{"type":"tool_running","toolName":"read_file"}}\n',
+            '{"type":"result","subtype":"success","stopReason":"end_turn",'
+            '"finalText":"DONE","usage":{},"durationMs":12}\n',
+            "",
+        ]
+        mock_process.communicate.return_value = ("", "")
+        mock_process.returncode = 0
+
+        with patch("subprocess.Popen", return_value=mock_process):
+            result = execute_agent(
+                AgentInvocation(cli="command-code", prompt="x", cwd="/tmp"),
+                timeout_ms=5000,
+            )
+        assert result["status"] == "success"
+        assert result["result"] == "DONE"
+
 
 class TestOpencodeDataDirIsolation:
     """Each OpenCode invocation gets a private XDG data/state home.
