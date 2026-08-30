@@ -1,6 +1,6 @@
 # Sub-Agents Skills
 
-English | [简体中文](README.zh-CN.md)
+English | [简体中文](README.zh-CN.md) | [Русский](README.ru.md) | [Deutsch](README.de.md) | [Español](README.es.md)
 
 [![Codex CLI](https://img.shields.io/badge/Codex%20CLI-Plugin-10a37f)](https://developers.openai.com/codex/cli)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-Plugin-purple)](https://claude.ai/code)
@@ -8,9 +8,9 @@ English | [简体中文](README.zh-CN.md)
 [![Agent Skills](https://img.shields.io/badge/Agent%20Skills-Spec%20Compliant-blue)](https://agentskills.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Run task-specific agents on different AI coding backends from one parent tool.
+Run task-specific agents on different AI coding backends from a single parent tool.
 
-Define each agent once in Markdown, then choose its execution backend independently. Route implementation, review, investigation, or verification to a different coding backend without rewriting the agent definition.
+Write an agent once in Markdown, then choose the backend that runs it. Send implementation, review, investigation, and verification work to different coding tools without duplicating the agent definition.
 
 The skill itself follows the [Agent Skills](https://agentskills.io) standard; the agents it runs are Markdown files under `.agents/`.
 
@@ -116,7 +116,7 @@ Use the code-reviewer agent to review the authentication changes.
 
 The parent tool invokes the agent with the selected backend and returns its result.
 
-## Why?
+## Why Use It?
 
 Most AI coding tools provide sub-agents tied to their own models. Claude Code delegates to Claude, and Codex delegates to GPT. Their built-in delegation does not provide a portable way to route a task to another provider's model.
 
@@ -389,9 +389,10 @@ export CURSOR_API_KEY=<your-cursor-token> # optional when cursor-agent is logged
 <details>
 <summary>OpenCode</summary>
 
-The `opencode` backend uses the model selected in the agent definition, or the
-configured OpenCode default when `model` is omitted. This provides one route to
-OpenCode-supported providers, OpenAI-compatible APIs, gateways, and local models.
+The `opencode` backend uses the model selected in the agent definition. If
+`model` is omitted, it uses OpenCode's configured default. Through OpenCode, an
+agent can run on supported providers, OpenAI-compatible APIs, gateways, or local
+models.
 
 Configure OpenCode in `~/.config/opencode/opencode.json` or the project's
 `opencode.json`, then use provider/model syntax when selecting a model:
@@ -428,9 +429,9 @@ Only use agent definitions you've written yourself or from sources you trust. Re
 
 ## How It Works
 
-The parent tool reads the installed `SKILL.md`, which tells it how to invoke the
-runner. The runner loads the selected `.agents/*.md` definition, calls its
-configured backend, and returns the result.
+The parent tool reads the installed `SKILL.md` to learn how to invoke the runner.
+The runner then loads the selected `.agents/*.md` definition, calls its configured
+backend, and returns that invocation's result to the parent.
 
 ```mermaid
 graph LR
@@ -461,13 +462,13 @@ skills/sub-agents/
 
 ### Independent Contexts
 
-Each sub-agent invocation starts a fresh conversation. It does not inherit
-another sub-agent's chat history, but it does share the selected working
-directory and its files.
+Each sub-agent invocation starts a fresh conversation. Sub-agents do not inherit
+one another's chat history. They do, however, use the same selected working
+directory and can see the files it contains.
 
-The parent receives the result returned by the runner, not the sub-agent's
-accumulated conversation history. Each call starts a separate CLI process and
-therefore has its own startup cost.
+The parent receives the runner's final result, not the sub-agent's complete
+conversation history. Each invocation starts a separate CLI process and has its
+own startup cost.
 
 ## Troubleshooting
 
