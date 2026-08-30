@@ -1,6 +1,6 @@
 # Sub-Agents Skills
 
-[English](README.md) | 简体中文
+[English](README.md) | 简体中文 | [Русский](README.ru.md) | [Deutsch](README.de.md) | [Español](README.es.md)
 
 [![Codex CLI](https://img.shields.io/badge/Codex%20CLI-Plugin-10a37f)](https://developers.openai.com/codex/cli)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-Plugin-purple)](https://claude.ai/code)
