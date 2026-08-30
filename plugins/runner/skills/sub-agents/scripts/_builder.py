@@ -8,10 +8,6 @@ from dataclasses import dataclass
 from _constants import SUPPORTED_CLIS_HELP, format_concatenated_prompt
 from _loader import DEFAULT_PERMISSION
 
-_COMMAND_CODE_POLICY_MOD = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "command_code_policy.mjs")
-)
-
 
 @dataclass(frozen=True)
 class AgentInvocation:
@@ -77,8 +73,6 @@ def build_command(cli: str, prompt: str) -> tuple[str, list[str]]:
             "--trust",
             "--no-session",
             "--skip-onboarding",
-            "--mod",
-            _COMMAND_CODE_POLICY_MOD,
             "-p",
             prompt,
         ]
@@ -136,14 +130,9 @@ _OPENCODE_PERMISSIONS = {
 }
 
 _COMMAND_CODE_PERMISSIONS = {
-    "read-only": (
-        "--permission-mode",
-        "plan",
-        "--mod-option",
-        "runner-permission=read-only",
-    ),
-    "safe-edit": ("--yolo", "--mod-option", "runner-permission=safe-edit"),
-    "yolo": ("--yolo", "--mod-option", "runner-permission=yolo"),
+    "read-only": ("--permission-mode", "plan"),
+    "safe-edit": ("--yolo", "--permission-mode", "auto-accept"),
+    "yolo": ("--yolo",),
 }
 
 

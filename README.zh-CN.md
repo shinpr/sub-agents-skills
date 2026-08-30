@@ -222,8 +222,8 @@ permission: safe-edit
 
 **权限级别：**
 
-- `read-only`：仅用于调查和审查，不允许编辑文件或通过 shell 写入（codex `-s read-only` / claude `--permission-mode plan` / cursor `--mode plan --sandbox enabled` / grok `--sandbox read-only` / antigravity `--mode plan --sandbox` / gemini `--approval-mode plan` / OpenCode 拒绝写入的权限规则 / Command Code plan 模式）
-- `safe-edit`：默认的非交互式编辑模式（codex `-s workspace-write` + `approval_policy=never` / claude `--permission-mode acceptEdits` / cursor `--trust --sandbox enabled` / grok `--sandbox workspace` / antigravity `--mode accept-edits --sandbox` / gemini `--approval-mode auto_edit` / OpenCode 和 Command Code 的 runner 权限规则）
+- `read-only`：仅用于调查和审查，不允许编辑文件或通过 shell 写入（codex `-s read-only` / claude `--permission-mode plan` / cursor `--mode plan --sandbox enabled` / grok `--sandbox read-only` / antigravity `--mode plan --sandbox` / gemini `--approval-mode plan` / OpenCode 拒绝写入的权限规则 / Command Code `--permission-mode plan`）
+- `safe-edit`：默认的非交互式编辑模式（codex `-s workspace-write` + `approval_policy=never` / claude `--permission-mode acceptEdits` / cursor `--trust --sandbox enabled` / grok `--sandbox workspace` / antigravity `--mode accept-edits --sandbox` / gemini `--approval-mode auto_edit` / OpenCode 权限规则 / Command Code `--yolo --permission-mode auto-accept`）
 - `yolo`：绕过所有审批和沙箱限制；只应在你信任的任务和环境中使用。
 
 子代理没有标准输入，因此 runner 会以非交互模式调用各个后端。不同 CLI 的权限参数并不等价，实际隔离保证取决于所选 CLI。例如，Cursor 的沙箱会将受支持的 shell 命令限制在沙箱内，而 `--mode plan` 则提供只读约束。
