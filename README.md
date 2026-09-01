@@ -223,7 +223,7 @@ field.
 
 **Permission levels:**
 
-- `read-only`: investigation/review only, no edits or shell writes (codex `-s read-only` / claude `--permission-mode plan` / cursor `--mode plan --sandbox enabled` / grok `--sandbox read-only` / antigravity `--mode plan --sandbox` / gemini `--approval-mode plan` / OpenCode permission deny rules / Command Code `--permission-mode plan`)
+- `read-only`: investigation/review mode that prevents direct edits where supported; shell behavior depends on the backend and this mode is not a security boundary (codex `-s read-only` / claude `--permission-mode plan` / cursor `--mode plan --sandbox enabled` / grok `--sandbox read-only` / antigravity `--mode plan --sandbox` / gemini `--approval-mode plan` / OpenCode permission rules / Command Code `--permission-mode plan`)
 - `safe-edit`: default non-interactive edit mode (codex `-s workspace-write` + `approval_policy=never` / claude `--permission-mode acceptEdits` / cursor `--trust --sandbox enabled` / grok `--sandbox workspace` / antigravity `--mode accept-edits --sandbox` / gemini `--approval-mode auto_edit` / OpenCode permission rules / Command Code `--yolo --permission-mode auto-accept`)
 - `yolo`: bypass all approvals and sandboxing; use it only for tasks and environments you trust.
 

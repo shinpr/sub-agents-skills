@@ -457,7 +457,6 @@ class TestBuildInvocationArgs:
                 "read-only",
                 {
                     "edit": "deny",
-                    "bash": "deny",
                     "task": "deny",
                     "external_directory": "deny",
                     "question": "deny",

@@ -222,7 +222,7 @@ Describe su propósito en una frase.
 
 **Niveles de permisos:**
 
-- `read-only`: solo investigación y revisión, sin edición de archivos ni comandos de shell que escriban (codex `-s read-only` / claude `--permission-mode plan` / cursor `--mode plan --sandbox enabled` / grok `--sandbox read-only` / antigravity `--mode plan --sandbox` / gemini `--approval-mode plan` / reglas de denegación de OpenCode / modo plan de Command Code)
+- `read-only`: modo de investigación y revisión que impide las ediciones directas cuando el backend lo admite; el comportamiento del shell depende del backend y este modo no es un límite de seguridad (codex `-s read-only` / claude `--permission-mode plan` / cursor `--mode plan --sandbox enabled` / grok `--sandbox read-only` / antigravity `--mode plan --sandbox` / gemini `--approval-mode plan` / reglas de permisos de OpenCode / modo plan de Command Code)
 - `safe-edit`: modo de edición no interactivo predeterminado (codex `-s workspace-write` + `approval_policy=never` / claude `--permission-mode acceptEdits` / cursor `--trust --sandbox enabled` / grok `--sandbox workspace` / antigravity `--mode accept-edits --sandbox` / gemini `--approval-mode auto_edit` / reglas del runner para OpenCode y Command Code)
 - `yolo`: omite todas las aprobaciones y el aislamiento; úsalo únicamente con tareas y entornos de confianza.
 

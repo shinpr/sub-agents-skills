@@ -216,7 +216,6 @@ def _build_grok_args(inv: AgentInvocation) -> ProcessInvocation:
 _OPENCODE_PERMISSION_MAPPING = {
     "read-only": {
         "edit": "deny",
-        "bash": "deny",
         "task": "deny",
         "external_directory": "deny",
         "question": "deny",
