@@ -222,7 +222,7 @@ permission: safe-edit
 
 **Уровни доступа:**
 
-- `read-only`: только исследование и ревью, без изменения файлов и команд оболочки с записью (codex `-s read-only` / claude `--permission-mode plan` / cursor `--mode plan --sandbox enabled` / grok `--sandbox read-only` / antigravity `--mode plan --sandbox` / gemini `--approval-mode plan` / запрещающие правила OpenCode / режим plan в Command Code)
+- `read-only`: режим исследования и ревью, запрещающий прямое редактирование там, где это поддерживает бэкенд; поведение shell зависит от бэкенда, и этот режим не является границей безопасности (codex `-s read-only` / claude `--permission-mode plan` / cursor `--mode plan --sandbox enabled` / grok `--sandbox read-only` / antigravity `--mode plan --sandbox` / gemini `--approval-mode plan` / правила разрешений OpenCode / режим plan в Command Code)
 - `safe-edit`: стандартный неинтерактивный режим редактирования (codex `-s workspace-write` + `approval_policy=never` / claude `--permission-mode acceptEdits` / cursor `--trust --sandbox enabled` / grok `--sandbox workspace` / antigravity `--mode accept-edits --sandbox` / gemini `--approval-mode auto_edit` / правила разрешений раннера для OpenCode и Command Code)
 - `yolo`: отключает все подтверждения и песочницу; используйте только для задач и окружений, которым доверяете.
 

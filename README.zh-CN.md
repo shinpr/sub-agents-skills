@@ -222,7 +222,7 @@ permission: safe-edit
 
 **权限级别：**
 
-- `read-only`：仅用于调查和审查，不允许编辑文件或通过 shell 写入（codex `-s read-only` / claude `--permission-mode plan` / cursor `--mode plan --sandbox enabled` / grok `--sandbox read-only` / antigravity `--mode plan --sandbox` / gemini `--approval-mode plan` / OpenCode 拒绝写入的权限规则 / Command Code `--permission-mode plan`）
+- `read-only`：用于调查和审查，并在后端支持时阻止直接编辑；shell 行为取决于后端，此模式并非安全边界（codex `-s read-only` / claude `--permission-mode plan` / cursor `--mode plan --sandbox enabled` / grok `--sandbox read-only` / antigravity `--mode plan --sandbox` / gemini `--approval-mode plan` / OpenCode 权限规则 / Command Code `--permission-mode plan`）
 - `safe-edit`：默认的非交互式编辑模式（codex `-s workspace-write` + `approval_policy=never` / claude `--permission-mode acceptEdits` / cursor `--trust --sandbox enabled` / grok `--sandbox workspace` / antigravity `--mode accept-edits --sandbox` / gemini `--approval-mode auto_edit` / OpenCode 权限规则 / Command Code `--yolo --permission-mode auto-accept`）
 - `yolo`：绕过所有审批和沙箱限制；只应在你信任的任务和环境中使用。
 

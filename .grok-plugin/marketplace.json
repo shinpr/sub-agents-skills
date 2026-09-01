@@ -1,6 +1,6 @@
 {
   "name": "sub-agents-skills",
-  "description": "Sub-agent runner skill for Codex, Claude Code, Cursor CLI, GLM, Kimi, Grok Build, Gemini CLI, OpenCode, and Command Code.",
+  "description": "Marketplace for the sub-agent runner plugin.",
   "owner": {
     "name": "Shinsuke Kagawa",
     "url": "https://github.com/shinpr"
@@ -8,8 +8,8 @@
   "plugins": [
     {
       "name": "runner",
-      "description": "Runner that executes agent definitions as sub-agents on Codex, Claude Code, Cursor CLI, GLM, Kimi, Grok Build, Gemini CLI, OpenCode, or Command Code.",
-      "version": "0.13.1",
+      "description": "Run agent definitions as sub-agents across multiple AI coding CLIs.",
+      "version": "0.13.2",
       "category": "development",
       "source": {
         "source": "local",
