@@ -8,7 +8,7 @@ import tempfile
 import threading
 import time
 
-from _builder import AgentInvocation, build_invocation_args
+from _builder import AgentInvocation, ProcessInvocation, build_invocation_args
 from _constants import DEFAULT_TIMEOUT_MS
 from _stream import StreamProcessor
 
@@ -72,7 +72,48 @@ def _error_response(
     }
 
 
-def build_final_response(
+def _classify_status(result: dict | None, exit_code: int, *, terminated_by_us: bool) -> str:
+    """Decide the run's outcome, treating intentional termination as success."""
+    if not result:
+        return "error"
+    if result.get("status") == "error" or result.get("is_error") is True:
+        return "error"
+    if result.get("status") == "partial":
+        return "partial"
+    if terminated_by_us or exit_code in _SUCCESS_EXIT_CODES:
+        return "success"
+    return "partial"
+
+
+def _error_message(response: dict, result: dict | None, stderr: str) -> str:
+    result_error = result.get("error") if result else None
+    result_subtype = result.get("subtype") if result else None
+    result_text = result.get("result") if result else None
+    if isinstance(result_error, str) and result_error.strip():
+        msg = result_error.strip()
+    elif isinstance(result_subtype, str) and result_subtype.startswith("error_"):
+        msg = f"CLI reported {result_subtype.strip()}"
+    elif isinstance(result_text, str) and result_text.strip():
+        msg = result_text.strip()
+    elif result:
+        msg = "CLI reported an error"
+    else:
+        msg = f"CLI exited with code {response['exit_code']}"
+
+    if stderr and stderr.strip():
+        msg += f": {stderr.strip()}"
+
+    if response["cli"] == "cursor-agent":
+        error_context = msg
+        if result is None:
+            error_context += f"\n{response['result'][:8192]}"
+        msg = _cursor_legacy_key_guidance(error_context) or msg
+    return msg
+
+
+# PLR0913: every input decides a case; keyword-only so order is never inferred.
+def build_final_response(  # noqa: PLR0913
+    *,
     cli: str,
     returncode: int | None,
     result: dict | None,
@@ -80,19 +121,8 @@ def build_final_response(
     stderr: str,
     terminated_by_us: bool = False,
 ) -> dict:
-    """Build a response, treating intentional termination as success."""
     exit_code = returncode if returncode is not None else 1
-
-    if result and (result.get("status") == "error" or result.get("is_error") is True):
-        status = "error"
-    elif result and result.get("status") == "partial":
-        status = "partial"
-    elif result and (terminated_by_us or exit_code in _SUCCESS_EXIT_CODES):
-        status = "success"
-    elif result:
-        status = "partial"
-    else:
-        status = "error"
+    status = _classify_status(result, exit_code, terminated_by_us=terminated_by_us)
 
     response = {
         "result": result.get("result", "") if result else "".join(stdout_lines),
@@ -101,27 +131,7 @@ def build_final_response(
         "cli": cli,
     }
     if status == "error":
-        result_error = result.get("error") if result else None
-        result_subtype = result.get("subtype") if result else None
-        result_text = result.get("result") if result else None
-        if isinstance(result_error, str) and result_error.strip():
-            msg = result_error.strip()
-        elif isinstance(result_subtype, str) and result_subtype.startswith("error_"):
-            msg = f"CLI reported {result_subtype.strip()}"
-        elif isinstance(result_text, str) and result_text.strip():
-            msg = result_text.strip()
-        elif result:
-            msg = "CLI reported an error"
-        else:
-            msg = f"CLI exited with code {exit_code}"
-        if stderr and stderr.strip():
-            msg += f": {stderr.strip()}"
-        if cli == "cursor-agent":
-            error_context = msg
-            if result is None:
-                error_context += f"\n{response['result'][:8192]}"
-            msg = _cursor_legacy_key_guidance(error_context) or msg
-        response["error"] = msg
+        response["error"] = _error_message(response, result, stderr)
     return response
 
 
@@ -226,11 +236,11 @@ def _drive_process(process: subprocess.Popen, cli: str, timeout_ms: int) -> dict
             result = processor.get_result()
 
         return build_final_response(
-            cli,
-            process.returncode,
-            result,
-            stdout_lines,
-            stderr,
+            cli=cli,
+            returncode=process.returncode,
+            result=result,
+            stdout_lines=stdout_lines,
+            stderr=stderr,
             terminated_by_us=saw_terminal,
         )
     except (OSError, ValueError) as e:
@@ -256,16 +266,18 @@ def _build_proc_env(env_override: dict | None) -> dict | None:
 
 
 def _spawn_and_drive(
-    command: str,
-    args: list,
+    process_invocation: ProcessInvocation,
+    inv: AgentInvocation,
     proc_env: dict | None,
-    cwd: str,
-    cli: str,
     timeout_ms: int,
 ) -> dict:
+    command, args = process_invocation.command, process_invocation.args
+    cli, cwd = inv.cli, inv.cwd
     try:
         # Prevent CLIs from waiting for interactive input.
-        process = subprocess.Popen(
+        # S603: command is a literal from build_command()'s closed set, and args
+        # go through argv with shell=False, so no prompt text reaches a shell.
+        process = subprocess.Popen(  # noqa: S603
             [command, *args],
             cwd=cwd,
             stdin=subprocess.DEVNULL,
@@ -321,24 +333,10 @@ def execute_agent(inv: AgentInvocation, timeout_ms: int = DEFAULT_TIMEOUT_MS) ->
             proc_env = _build_proc_env(
                 _isolated_opencode_env(process_invocation.env_override, temp_dir)
             )
-            return _spawn_and_drive(
-                process_invocation.command,
-                process_invocation.args,
-                proc_env,
-                inv.cwd,
-                inv.cli,
-                timeout_ms,
-            )
+            return _spawn_and_drive(process_invocation, inv, proc_env, timeout_ms)
         finally:
             # _spawn_and_drive reaps the process before returning.
             shutil.rmtree(temp_dir, ignore_errors=True)
 
     proc_env = _build_proc_env(process_invocation.env_override)
-    return _spawn_and_drive(
-        process_invocation.command,
-        process_invocation.args,
-        proc_env,
-        inv.cwd,
-        inv.cli,
-        timeout_ms,
-    )
+    return _spawn_and_drive(process_invocation, inv, proc_env, timeout_ms)

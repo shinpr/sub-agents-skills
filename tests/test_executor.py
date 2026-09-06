@@ -42,38 +42,52 @@ class TestBuildFinalResponse:
     """Status determination from (returncode, parsed result, stdout, stderr)."""
 
     def test_success(self):
-        r = build_final_response("codex", 0, {"result": "ok"}, [], "")
+        r = build_final_response(
+            cli="codex", returncode=0, result={"result": "ok"}, stdout_lines=[], stderr=""
+        )
         assert r == {"result": "ok", "exit_code": 0, "status": "success", "cli": "codex"}
 
     def test_sigterm_with_result_is_success(self):
         # CLI was terminated after the result event — that's still success
-        r = build_final_response("claude", 143, {"result": "ok"}, [], "")
+        r = build_final_response(
+            cli="claude", returncode=143, result={"result": "ok"}, stdout_lines=[], stderr=""
+        )
         assert r["status"] == "success"
         assert r["exit_code"] == 143
 
     def test_returncode_none_treated_as_failure(self):
         # Defensive: process not yet finished should not be reported as success
-        r = build_final_response("codex", None, {"result": "ok"}, [], "")
+        r = build_final_response(
+            cli="codex", returncode=None, result={"result": "ok"}, stdout_lines=[], stderr=""
+        )
         assert r["exit_code"] == 1
         assert r["status"] == "partial"
 
     def test_nonzero_with_result_is_partial(self):
-        r = build_final_response("codex", 2, {"result": "stuff"}, [], "")
+        r = build_final_response(
+            cli="codex", returncode=2, result={"result": "stuff"}, stdout_lines=[], stderr=""
+        )
         assert r["status"] == "partial"
         assert r["exit_code"] == 2
 
     def test_result_marked_partial_stays_partial_even_with_zero_exit(self):
-        r = build_final_response("grok", 0, {"result": "progress", "status": "partial"}, [], "")
+        r = build_final_response(
+            cli="grok",
+            returncode=0,
+            result={"result": "progress", "status": "partial"},
+            stdout_lines=[],
+            stderr="",
+        )
         assert r["status"] == "partial"
         assert r["exit_code"] == 0
 
     def test_result_marked_partial_stays_partial_when_terminated_by_us(self):
         r = build_final_response(
-            "grok",
-            1,
-            {"result": "progress", "status": "partial"},
-            [],
-            "",
+            cli="grok",
+            returncode=1,
+            result={"result": "progress", "status": "partial"},
+            stdout_lines=[],
+            stderr="",
             terminated_by_us=True,
         )
         assert r["status"] == "partial"
@@ -83,27 +97,45 @@ class TestBuildFinalResponse:
         # Windows: terminate() maps to TerminateProcess and yields exit code 1,
         # unlike POSIX SIGTERM (143 / -15). When we asked the CLI to stop after a
         # complete result, the exit code is irrelevant — it must report success.
-        r = build_final_response("claude", 1, {"result": "ok"}, [], "", terminated_by_us=True)
+        r = build_final_response(
+            cli="claude",
+            returncode=1,
+            result={"result": "ok"},
+            stdout_lines=[],
+            stderr="",
+            terminated_by_us=True,
+        )
         assert r["status"] == "success"
         assert r["exit_code"] == 1
 
     def test_nonzero_with_result_not_terminated_is_partial(self):
         # Same exit code 1, but we did NOT initiate termination — a genuine
         # abnormal exit with partial output stays "partial", not "success".
-        r = build_final_response("claude", 1, {"result": "ok"}, [], "", terminated_by_us=False)
+        r = build_final_response(
+            cli="claude",
+            returncode=1,
+            result={"result": "ok"},
+            stdout_lines=[],
+            stderr="",
+            terminated_by_us=False,
+        )
         assert r["status"] == "partial"
         assert r["exit_code"] == 1
 
     def test_returncode_none_without_result_is_error(self):
         # No exit and no parsed payload — must not slip through as success.
-        r = build_final_response("codex", None, None, [], "")
+        r = build_final_response(
+            cli="codex", returncode=None, result=None, stdout_lines=[], stderr=""
+        )
         assert r["status"] == "error"
         assert r["exit_code"] == 1
         # No stderr means just the bare "exited with code" message, no colon suffix.
         assert r["error"] == "CLI exited with code 1"
 
     def test_nonzero_without_result_is_error_with_stderr(self):
-        r = build_final_response("codex", 1, None, ["raw line\n"], "boom")
+        r = build_final_response(
+            cli="codex", returncode=1, result=None, stdout_lines=["raw line\n"], stderr="boom"
+        )
         assert r["status"] == "error"
         assert r["exit_code"] == 1
         assert r["error"] == "CLI exited with code 1: boom"
@@ -112,16 +144,16 @@ class TestBuildFinalResponse:
 
     def test_error_result_text_takes_precedence_over_non_error_subtype(self):
         r = build_final_response(
-            "claude",
-            1,
-            {
+            cli="claude",
+            returncode=1,
+            result={
                 "result": "Authentication required",
                 "subtype": "success",
                 "is_error": True,
                 "status": "error",
             },
-            [],
-            "",
+            stdout_lines=[],
+            stderr="",
             terminated_by_us=True,
         )
         assert r["status"] == "error"
@@ -130,11 +162,11 @@ class TestBuildFinalResponse:
     def test_cursor_auth_error_with_legacy_key_returns_migration_guidance(self):
         with patch.dict("os.environ", {"CLI_API_KEY": "legacy-secret"}, clear=True):
             r = build_final_response(
-                "cursor-agent",
-                1,
-                {"result": "Authentication required", "status": "error"},
-                [],
-                "",
+                cli="cursor-agent",
+                returncode=1,
+                result={"result": "Authentication required", "status": "error"},
+                stdout_lines=[],
+                stderr="",
             )
 
         assert r["error"] == (
@@ -146,11 +178,11 @@ class TestBuildFinalResponse:
     def test_cursor_auth_error_in_unparsed_stdout_returns_migration_guidance(self):
         with patch.dict("os.environ", {"CLI_API_KEY": "legacy-secret"}, clear=True):
             r = build_final_response(
-                "cursor-agent",
-                1,
-                None,
-                ['{"error":"You are not logged in"}\n'],
-                "",
+                cli="cursor-agent",
+                returncode=1,
+                result=None,
+                stdout_lines=['{"error":"You are not logged in"}\n'],
+                stderr="",
             )
 
         assert r["error"] == (
@@ -161,11 +193,11 @@ class TestBuildFinalResponse:
     def test_cursor_non_auth_error_keeps_original_error_with_legacy_key(self):
         with patch.dict("os.environ", {"CLI_API_KEY": "legacy-secret"}, clear=True):
             r = build_final_response(
-                "cursor-agent",
-                1,
-                {"result": "Model is unavailable", "status": "error"},
-                [],
-                "",
+                cli="cursor-agent",
+                returncode=1,
+                result={"result": "Model is unavailable", "status": "error"},
+                stdout_lines=[],
+                stderr="",
             )
 
         assert r["error"] == "Model is unavailable"
@@ -173,15 +205,15 @@ class TestBuildFinalResponse:
     def test_cursor_non_auth_error_ignores_auth_phrases_in_structured_result(self):
         with patch.dict("os.environ", {"CLI_API_KEY": "legacy-secret"}, clear=True):
             r = build_final_response(
-                "cursor-agent",
-                1,
-                {
+                cli="cursor-agent",
+                returncode=1,
+                result={
                     "result": "Investigating an unauthorized response",
                     "error": "Model is unavailable",
                     "status": "error",
                 },
-                [],
-                "",
+                stdout_lines=[],
+                stderr="",
             )
 
         assert r["error"] == "Model is unavailable"
@@ -190,11 +222,11 @@ class TestBuildFinalResponse:
         env = {"CURSOR_API_KEY": "cursor-secret", "CLI_API_KEY": "legacy-secret"}
         with patch.dict("os.environ", env, clear=True):
             r = build_final_response(
-                "cursor-agent",
-                1,
-                {"result": "Invalid API key", "status": "error"},
-                [],
-                "",
+                cli="cursor-agent",
+                returncode=1,
+                result={"result": "Invalid API key", "status": "error"},
+                stdout_lines=[],
+                stderr="",
             )
 
         assert r["error"] == "Invalid API key"

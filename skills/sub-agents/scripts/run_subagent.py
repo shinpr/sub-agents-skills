@@ -10,10 +10,10 @@ from pathlib import Path
 # Ensure sibling modules import correctly when invoked via absolute path.
 sys.path.insert(0, str(Path(__file__).parent))
 
-from _builder import AgentInvocation  # noqa: E402
-from _constants import DEFAULT_TIMEOUT_MS, SUPPORTED_CLIS_HELP  # noqa: E402
-from _executor import execute_agent  # noqa: E402
-from _loader import get_agents_dir, list_agents, load_agent  # noqa: E402
+from _builder import AgentInvocation
+from _constants import DEFAULT_TIMEOUT_MS, SUPPORTED_CLIS_HELP
+from _executor import execute_agent
+from _loader import get_agents_dir, list_agents, load_agent
 
 
 def _print_error(error: str, exit_code: int = 1, cli: str | None = None) -> None:

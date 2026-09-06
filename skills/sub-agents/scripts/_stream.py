@@ -67,7 +67,7 @@ def _grok_json_result(data: dict) -> dict | None:
 class StreamProcessor:
     """Normalize supported CLI streams into a result payload."""
 
-    def __init__(self, cli: str):
+    def __init__(self, cli: str) -> None:
         self.cli = cli
         try:
             self._line_processor = _LINE_PROCESSORS[cli]
@@ -243,7 +243,7 @@ class StreamProcessor:
 
         return False
 
-    def get_result(self):
+    def get_result(self) -> dict | None:
         return self.result_json
 
 
