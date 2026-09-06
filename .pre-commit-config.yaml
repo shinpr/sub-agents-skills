@@ -13,6 +13,12 @@ repos:
         language: system
         pass_filenames: false
 
+      - id: mypy
+        name: mypy
+        entry: python -m mypy
+        language: system
+        pass_filenames: false
+
       - id: plugin-sync-check
         name: plugin sync check
         entry: python scripts/sync_plugin.py --check

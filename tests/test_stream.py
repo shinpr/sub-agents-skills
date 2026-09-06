@@ -46,7 +46,9 @@ class TestStreamProcessor:
         assert processor.get_result() is None
 
         assert processor.process_line('{"type": "result", "result": "actual response"}')
-        assert processor.get_result()["result"] == "actual response"
+        result = processor.get_result()
+        assert result is not None
+        assert result["result"] == "actual response"
 
     def test_gemini_stream(self) -> None:
         processor = StreamProcessor("gemini")
@@ -93,7 +95,9 @@ class TestStreamProcessor:
         assert processor.process_line(
             json.dumps({"event": "result", "result": {"status": status, "response": "progress"}})
         )
-        assert processor.get_result()["status"] == "partial"
+        result = processor.get_result()
+        assert result is not None
+        assert result["status"] == "partial"
 
     def test_antigravity_invalid_status_is_error(self) -> None:
         processor = StreamProcessor("antigravity")

@@ -11,12 +11,12 @@ import time
 from collections.abc import Callable
 from io import StringIO
 from pathlib import Path
-from typing import NoReturn
+from typing import NoReturn, Protocol
 from unittest.mock import MagicMock, patch
 
 import pytest
 from _builder import AgentInvocation, ProcessInvocation
-from _executor import _build_proc_env, build_final_response, execute_agent
+from _executor import AgentResponse, _build_proc_env, build_final_response, execute_agent
 from run_subagent import main
 
 
@@ -28,6 +28,7 @@ class TestBuildProcEnv:
     def test_sets_and_overrides_keys(self) -> None:
         with patch.dict("os.environ", {"EXISTING": "old"}, clear=True):
             env = _build_proc_env({"NEW": "v", "EXISTING": "new"})
+        assert env is not None
         assert env["NEW"] == "v"
         assert env["EXISTING"] == "new"
 
@@ -36,6 +37,7 @@ class TestBuildProcEnv:
         # different provider before spawning the child process.
         with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-ant-real"}, clear=True):
             env = _build_proc_env({"ANTHROPIC_AUTH_TOKEN": "zai", "ANTHROPIC_API_KEY": None})
+        assert env is not None
         assert "ANTHROPIC_API_KEY" not in env
         assert env["ANTHROPIC_AUTH_TOKEN"] == "zai"
 
@@ -616,11 +618,15 @@ class TestOpencodeDataDirIsolation:
         m.returncode = 0
         return m
 
-    def _run_capturing_env(self, popen_side_effect: Callable[[], MagicMock]) -> tuple[dict, dict]:
-        captured = {}
+    def _run_capturing_env(
+        self, popen_side_effect: Callable[[], MagicMock]
+    ) -> tuple[AgentResponse, dict[str, str]]:
+        captured: dict[str, dict[str, str]] = {}
 
         def popen_factory(cmd: list[str], **kwargs: object) -> MagicMock:
-            captured["env"] = kwargs["env"]
+            env = kwargs["env"]
+            assert isinstance(env, dict)
+            captured["env"] = env
             return popen_side_effect()
 
         with patch("subprocess.Popen", side_effect=popen_factory):
@@ -655,7 +661,7 @@ class TestOpencodeDataDirIsolation:
         assert not os.path.exists(os.path.dirname(env["XDG_DATA_HOME"]))
 
     def test_temp_dir_is_removed_after_io_error_once_process_is_reaped(self) -> None:
-        captured = {}
+        captured: dict[str, str] = {}
         process = MagicMock()
         process.stdout.readline.return_value = ""
         process.returncode = -9
@@ -671,7 +677,9 @@ class TestOpencodeDataDirIsolation:
         process.wait.side_effect = wait
 
         def popen_factory(_cmd: list[str], **kwargs: object) -> MagicMock:
-            captured["temp_dir"] = os.path.dirname(kwargs["env"]["XDG_DATA_HOME"])
+            env = kwargs["env"]
+            assert isinstance(env, dict)
+            captured["temp_dir"] = os.path.dirname(env["XDG_DATA_HOME"])
             return process
 
         with patch("subprocess.Popen", side_effect=popen_factory):
@@ -689,14 +697,16 @@ class TestOpencodeDataDirIsolation:
         # auth.json lives in the data home, so `opencode auth login` credentials
         # must follow the invocation into its private dir. Checked inside the
         # Popen factory because the temp dir is gone after execute_agent returns.
-        captured = {}
+        captured: dict[str, str | None] = {}
         with tempfile.TemporaryDirectory() as fake_default:
             opencode_dir = Path(fake_default) / "opencode"
             opencode_dir.mkdir(parents=True)
             (opencode_dir / "auth.json").write_text('{"provider":"key"}')
 
             def popen_factory(cmd: list[str], **kwargs: object) -> MagicMock:
-                copied = Path(kwargs["env"]["XDG_DATA_HOME"]) / "opencode" / "auth.json"
+                env = kwargs["env"]
+                assert isinstance(env, dict)
+                copied = Path(env["XDG_DATA_HOME"]) / "opencode" / "auth.json"
                 captured["content"] = copied.read_text() if copied.is_file() else None
                 return self._mock_process()
 
@@ -749,10 +759,16 @@ class TestOpencodeDataDirIsolation:
         assert captured["env"] is None
 
 
+class PopenFactory(Protocol):
+    """The subprocess.Popen stand-in each end-to-end test installs."""
+
+    def __call__(self, cmd: list[str], /, **kwargs: object) -> MagicMock: ...
+
+
 class TestMainEndToEnd:
     """Drive main() end-to-end with subprocess mocked. Verifies the JSON contract."""
 
-    def _run(self, argv: list[str], popen_factory: Callable[..., MagicMock]) -> tuple[str, object]:
+    def _run(self, argv: list[str], popen_factory: PopenFactory) -> tuple[str, object]:
         with patch.object(sys, "argv", argv):
             with patch("subprocess.Popen", side_effect=popen_factory):
                 buf = StringIO()
@@ -771,7 +787,7 @@ class TestMainEndToEnd:
                 "# Echo\n\nReply.\n"
             )
 
-            def popen_factory(args: list[str], **_kwargs: object) -> MagicMock:
+            def popen_factory(args: list[str], /, **kwargs: object) -> MagicMock:
                 model_idx = args.index("--model")
                 assert args[model_idx + 1] == "gpt-5.4-mini"
                 assert ("-c", 'model_reasoning_effort="high"') in zip(args, args[1:])

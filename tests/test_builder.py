@@ -10,24 +10,43 @@ import pytest
 from _builder import (
     _BACKEND_SPECS,
     AgentInvocation,
+    ProcessInvocation,
     build_command,
     build_invocation_args,
     effort_flags,
     permission_flags,
 )
 from _constants import SUPPORTED_CLIS
-from _loader import PERMISSION_VALUES
+from _loader import DEFAULT_PERMISSION, PERMISSION_VALUES
 
 
-def _inv(cli: str, **kw: object) -> AgentInvocation:
-    defaults = {
-        "cli": cli,
-        "system_context": "Agent definition",
-        "prompt": "User task",
-        "cwd": "/test/cwd",
-    }
-    defaults.update(kw)
-    return AgentInvocation(**defaults)
+# PLR0913: mirrors AgentInvocation's fields, so the count is the dataclass's.
+def _inv(  # noqa: PLR0913
+    cli: str,
+    *,
+    system_context: str = "Agent definition",
+    prompt: str = "User task",
+    cwd: str = "/test/cwd",
+    agent_file: str | None = None,
+    permission: str = DEFAULT_PERMISSION,
+    model: str | None = None,
+    effort: str | None = None,
+) -> AgentInvocation:
+    return AgentInvocation(
+        cli=cli,
+        prompt=prompt,
+        cwd=cwd,
+        system_context=system_context,
+        agent_file=agent_file,
+        permission=permission,
+        model=model,
+        effort=effort,
+    )
+
+
+def _env(process: ProcessInvocation) -> dict[str, str | None]:
+    assert process.env_override is not None
+    return process.env_override
 
 
 def _credential_env(cli: str) -> dict[str, str]:
@@ -349,8 +368,8 @@ class TestBuildInvocationArgs:
             clear=True,
         ):
             process = build_invocation_args(_inv("glm"))
-        assert process.env_override["ANTHROPIC_API_KEY"] is None
-        assert process.env_override["ANTHROPIC_AUTH_TOKEN"] == "zai-secret"
+        assert _env(process)["ANTHROPIC_API_KEY"] is None
+        assert _env(process)["ANTHROPIC_AUTH_TOKEN"] == "zai-secret"
 
     def test_glm_prefers_provider_specific_api_key(self) -> None:
         with patch.dict(
@@ -359,8 +378,8 @@ class TestBuildInvocationArgs:
             clear=True,
         ):
             process = build_invocation_args(_inv("glm"))
-        assert process.env_override["ANTHROPIC_AUTH_TOKEN"] == "zai-primary"
-        assert process.env_override["CLI_API_KEY"] is None
+        assert _env(process)["ANTHROPIC_AUTH_TOKEN"] == "zai-primary"
+        assert _env(process)["CLI_API_KEY"] is None
         assert "zai-primary" not in process.args
         assert "legacy-secret" not in process.args
 
@@ -420,9 +439,9 @@ class TestBuildInvocationArgs:
             clear=True,
         ):
             process = build_invocation_args(_inv("kimi"))
-        assert process.env_override["ANTHROPIC_API_KEY"] == "kimi-primary"
-        assert process.env_override["ANTHROPIC_AUTH_TOKEN"] is None
-        assert process.env_override["CLI_API_KEY"] is None
+        assert _env(process)["ANTHROPIC_API_KEY"] == "kimi-primary"
+        assert _env(process)["ANTHROPIC_AUTH_TOKEN"] is None
+        assert _env(process)["CLI_API_KEY"] is None
         assert "kimi-primary" not in process.args
         assert "legacy-secret" not in process.args
 
@@ -490,7 +509,9 @@ class TestBuildInvocationArgs:
         assert "--model" not in process.args
         assert "[System Context]" in process.args[-1]
         assert "Agent definition" in process.args[-1]
-        assert json.loads(process.env_override["OPENCODE_PERMISSION"]) == expected
+        permission_env = _env(process)["OPENCODE_PERMISSION"]
+        assert permission_env is not None
+        assert json.loads(permission_env) == expected
 
     def test_command_code_read_only_uses_plan_mode(self) -> None:
         process = build_invocation_args(_inv("command-code", permission="read-only"))

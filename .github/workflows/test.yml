@@ -29,13 +29,19 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pytest ruff pre-commit tomli
+          pip install pytest ruff pre-commit tomli mypy
 
       - name: Run lint
         run: ruff check .
 
       - name: Check formatting
         run: ruff format --check .
+
+      # Contracts between modules do not vary by interpreter, so this runs once;
+      # the 3.9 job proves the floor by running the scripts.
+      - name: Run type check
+        if: matrix.python-version == '3.12'
+        run: python -m mypy
 
       - name: Check plugin sync
         run: python scripts/sync_plugin.py --check
