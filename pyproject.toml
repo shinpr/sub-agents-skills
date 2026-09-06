@@ -60,6 +60,20 @@ max-args = 4
 quote-style = "double"
 indent-style = "space"
 
+[tool.mypy]
+# Runs on the development interpreter. Python 3.9 support is covered where it is
+# observable instead: ruff's target-version rejects newer syntax and the 3.9 CI
+# job exercises every script module, so mypy needs no version pin.
+strict = true
+# strict does not imply this one; it closes the explicit `Any` escape hatch.
+disallow_any_explicit = true
+files = ["skills/sub-agents/scripts", "scripts", "tests"]
+# plugins/runner/** is a byte-identical copy of skills/sub-agents/**. Checking
+# both would collide on duplicate module names; sync_plugin.py --check keeps
+# the copy honest instead.
+exclude = "^plugins/"
+mypy_path = "skills/sub-agents/scripts"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]

@@ -18,6 +18,7 @@ class TestStreamProcessor:
         processor = StreamProcessor(cli)
         assert processor.process_line('{"type": "result", "result": "hello"}')
         result = processor.get_result()
+        assert result is not None
         assert result["result"] == "hello"
 
     @pytest.mark.parametrize("cli", ["claude", "glm", "kimi"])
@@ -27,6 +28,7 @@ class TestStreamProcessor:
             '{"type":"result","subtype":"error_during_execution","is_error":true}'
         )
         result = processor.get_result()
+        assert result is not None
         assert result["status"] == "error"
 
     @pytest.mark.parametrize("cli", ["claude", "glm", "kimi"])
@@ -57,6 +59,7 @@ class TestStreamProcessor:
         )
         assert processor.process_line('{"type": "result", "status": "success"}')
         result = processor.get_result()
+        assert result is not None
         assert result["result"] == "part1part2"
 
     def test_antigravity_stream(self) -> None:
@@ -69,6 +72,7 @@ class TestStreamProcessor:
             '{"event":"result","result":{"status":"SUCCESS","response":"done"}}'
         )
         result = processor.get_result()
+        assert result is not None
         assert result["result"] == "done"
         assert result["status"] == "success"
 
@@ -79,6 +83,7 @@ class TestStreamProcessor:
             '"error":"authentication required"}}'
         )
         result = processor.get_result()
+        assert result is not None
         assert result["status"] == "error"
         assert result["error"] == "authentication required"
 
@@ -95,7 +100,9 @@ class TestStreamProcessor:
         assert processor.process_line(
             '{"event":"result","result":{"status":"INVALID","response":""}}'
         )
-        assert processor.get_result()["status"] == "error"
+        result = processor.get_result()
+        assert result is not None
+        assert result["status"] == "error"
 
     def test_codex_stream(self) -> None:
         processor = StreamProcessor("codex")
@@ -108,6 +115,7 @@ class TestStreamProcessor:
         )
         assert processor.process_line('{"type": "turn.completed"}')
         result = processor.get_result()
+        assert result is not None
         assert result["result"] == "msg1\nmsg2"
 
     def test_opencode_stream_collects_text_until_stop(self) -> None:
@@ -119,6 +127,7 @@ class TestStreamProcessor:
         assert not processor.process_line('{"type":"text","part":{"text":"part2"}}')
         assert processor.process_line('{"type":"step_finish","part":{"reason":"stop"}}')
         result = processor.get_result()
+        assert result is not None
         assert result["result"] == "part1part2"
         assert result["status"] == "success"
         assert result["stop_reason"] == "stop"
@@ -128,6 +137,7 @@ class TestStreamProcessor:
         assert not processor.process_line('{"type":"text","part":{"text":"truncated"}}')
         assert processor.process_line('{"type":"step_finish","part":{"reason":"length"}}')
         result = processor.get_result()
+        assert result is not None
         assert result["result"] == "truncated"
         assert result["status"] == "partial"
 
@@ -185,6 +195,7 @@ class TestStreamProcessor:
             "}"
         )
         result = processor.get_result()
+        assert result is not None
         assert result["result"] == '{"findings":[]}'
         assert result["status"] == "success"
 
@@ -192,6 +203,7 @@ class TestStreamProcessor:
         processor = StreamProcessor("grok")
         assert processor.process_line('{"text": "{\\"findings\\":[]}", "stopReason": "EndTurn"}')
         result = processor.get_result()
+        assert result is not None
         assert result["type"] == "result"
         assert result["result"] == '{"findings":[]}'
         assert result["status"] == "success"
@@ -200,6 +212,7 @@ class TestStreamProcessor:
         processor = StreamProcessor("grok")
         assert processor.process_line('{"text": "final answer"}')
         result = processor.get_result()
+        assert result is not None
         assert result["result"] == "final answer"
         assert result["status"] == "partial"
 
@@ -207,6 +220,7 @@ class TestStreamProcessor:
         processor = StreamProcessor("grok")
         assert processor.process_line('{"text": "progress only", "stopReason": "Cancelled"}')
         result = processor.get_result()
+        assert result is not None
         assert result["result"] == "progress only"
         assert result["status"] == "partial"
 
@@ -220,7 +234,20 @@ class TestStreamProcessor:
         assert processor.process_line(
             '{"type":"result","subtype":"success","is_error":false,"result":"done"}'
         )
-        assert processor.get_result()["result"] == "done"
+        result = processor.get_result()
+        assert result is not None
+        assert result["result"] == "done"
+
+    @pytest.mark.parametrize("line", ["123", "[1, 2]"])
+    def test_non_object_json_line_is_ignored(self, line: str) -> None:
+        processor = StreamProcessor("claude")
+        assert processor.process_line(line) is False
+        assert processor.get_result() is None
+
+    def test_codex_non_object_item_is_ignored(self) -> None:
+        processor = StreamProcessor("codex")
+        assert processor.process_line('{"type":"item.completed","item":"notdict"}') is False
+        assert processor.get_result() is None
 
     def test_unknown_cli_fails_fast(self) -> None:
         with pytest.raises(ValueError, match="Unsupported CLI"):
@@ -232,6 +259,7 @@ class TestStreamProcessor:
             '{"text": "progress only", "stopReason": "Cancelled"}'
         )
         result = processor.get_result()
+        assert result is not None
         assert result["result"] == "progress only"
         assert result["status"] == "partial"
 
@@ -241,6 +269,7 @@ class TestStreamProcessor:
             '{"text": "I will review.{\\"findings\\":[]}", "stopReason": "EndTurn"}'
         )
         result = processor.get_result()
+        assert result is not None
         assert result["result"] == '{"findings":[]}'
 
     def test_extract_trailing_json_object_rejects_extra_suffix(self) -> None:
