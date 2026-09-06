@@ -1,7 +1,7 @@
 {
   "name": "runner",
   "description": "Run agent definitions as sub-agents across multiple AI coding CLIs.",
-  "version": "0.13.2",
+  "version": "0.13.3",
   "author": {
     "name": "Shinsuke Kagawa",
     "url": "https://github.com/shinpr"
