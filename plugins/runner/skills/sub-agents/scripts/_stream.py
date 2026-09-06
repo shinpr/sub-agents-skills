@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import json
+from typing import Callable
 
 from _constants import SUPPORTED_CLIS_HELP
+
+# One decoded line from a backend's stream; every field is checked before use.
+StreamData = dict[str, object]
 
 
 def _is_string_delimiter(text: str, index: int) -> bool:
@@ -52,12 +56,13 @@ def _extract_trailing_json_object(text: str) -> str:
     return text
 
 
-def _grok_json_result(data: dict) -> dict | None:
-    if not isinstance(data.get("text"), str):
+def _grok_json_result(data: StreamData) -> StreamData | None:
+    text = data.get("text")
+    if not isinstance(text, str):
         return None
     return {
         "type": "result",
-        "result": _extract_trailing_json_object(data["text"]),
+        "result": _extract_trailing_json_object(text),
         "status": "success" if data.get("stopReason") == "EndTurn" else "partial",
         "stop_reason": data.get("stopReason"),
         "session_id": data.get("sessionId"),
@@ -67,7 +72,7 @@ def _grok_json_result(data: dict) -> dict | None:
 class StreamProcessor:
     """Normalize supported CLI streams into a result payload."""
 
-    def __init__(self, cli: str):
+    def __init__(self, cli: str) -> None:
         self.cli = cli
         try:
             self._line_processor = _LINE_PROCESSORS[cli]
@@ -75,12 +80,12 @@ class StreamProcessor:
             raise ValueError(
                 f"Unsupported CLI {cli!r}. Choose one of: {SUPPORTED_CLIS_HELP}."
             ) from e
-        self.result_json = None
-        self.gemini_parts = []
-        self.codex_messages = []
-        self.opencode_parts = []
+        self.result_json: StreamData | None = None
+        self.gemini_parts: list[str] = []
+        self.codex_messages: list[str] = []
+        self.opencode_parts: list[str] = []
 
-    def _process_gemini_line(self, data: dict) -> bool:
+    def _process_gemini_line(self, data: StreamData) -> bool:
         if data.get("type") == "message" and data.get("role") == "assistant":
             content = data.get("content", "")
             if isinstance(content, str):
@@ -97,12 +102,15 @@ class StreamProcessor:
 
         return False
 
-    def _process_antigravity_line(self, data: dict) -> bool:
+    def _process_antigravity_line(self, data: StreamData) -> bool:
         if data.get("event") != "result":
             return False
 
         payload = data.get("result")
-        if not isinstance(payload, dict) or not isinstance(payload.get("response"), str):
+        if not isinstance(payload, dict):
+            return False
+        response = payload.get("response")
+        if not isinstance(response, str):
             return False
 
         status = payload.get("status")
@@ -114,18 +122,22 @@ class StreamProcessor:
             normalized_status = "error"
         self.result_json = {
             "type": "result",
-            "result": payload["response"],
+            "result": response,
             "status": normalized_status,
         }
-        if isinstance(payload.get("error"), str):
-            self.result_json["error"] = payload["error"]
+        error = payload.get("error")
+        if isinstance(error, str):
+            self.result_json["error"] = error
         return True
 
-    def _process_codex_line(self, data: dict) -> bool:
+    def _process_codex_line(self, data: StreamData) -> bool:
         if data.get("type") == "item.completed":
-            item = data.get("item", {})
-            if item.get("type") == "agent_message" and isinstance(item.get("text"), str):
-                self.codex_messages.append(item["text"])
+            item = data.get("item")
+            if not isinstance(item, dict):
+                return False
+            text = item.get("text")
+            if item.get("type") == "agent_message" and isinstance(text, str):
+                self.codex_messages.append(text)
             return False
 
         if data.get("type") == "turn.completed":
@@ -138,7 +150,7 @@ class StreamProcessor:
 
         return False
 
-    def _process_opencode_line(self, data: dict) -> bool:
+    def _process_opencode_line(self, data: StreamData) -> bool:
         part = data.get("part")
         if not isinstance(part, dict):
             return False
@@ -163,7 +175,7 @@ class StreamProcessor:
         }
         return True
 
-    def _process_command_code_line(self, data: dict) -> bool:
+    def _process_command_code_line(self, data: StreamData) -> bool:
         if data.get("type") != "result":
             return False
 
@@ -175,28 +187,31 @@ class StreamProcessor:
         else:
             status = "error"
 
-        result = {
+        final_text = data.get("finalText")
+        result: StreamData = {
             "type": "result",
-            "result": data.get("finalText") if isinstance(data.get("finalText"), str) else "",
+            "result": final_text if isinstance(final_text, str) else "",
             "status": status,
         }
-        if isinstance(data.get("stopReason"), str):
-            result["stop_reason"] = data["stopReason"]
-        if isinstance(data.get("sessionId"), str):
-            result["session_id"] = data["sessionId"]
-        if isinstance(data.get("error"), str):
-            result["error"] = data["error"]
+        for source_key, target_key in (
+            ("stopReason", "stop_reason"),
+            ("sessionId", "session_id"),
+            ("error", "error"),
+        ):
+            value = data.get(source_key)
+            if isinstance(value, str):
+                result[target_key] = value
         self.result_json = result
         return True
 
-    def _process_grok_line(self, data: dict) -> bool:
+    def _process_grok_line(self, data: StreamData) -> bool:
         grok_result = _grok_json_result(data)
         if grok_result is None:
             return False
         self.result_json = grok_result
         return True
 
-    def _process_result_line(self, data: dict) -> bool:
+    def _process_result_line(self, data: StreamData) -> bool:
         if data.get("type") != "result":
             return False
 
@@ -226,6 +241,10 @@ class StreamProcessor:
         except json.JSONDecodeError:
             return False
 
+        # A line may decode to any JSON value; only an object carries an event.
+        if not isinstance(data, dict):
+            return False
+
         return self._line_processor(self, data)
 
     def process_complete_output(self, output: str) -> bool:
@@ -243,11 +262,11 @@ class StreamProcessor:
 
         return False
 
-    def get_result(self):
+    def get_result(self) -> StreamData | None:
         return self.result_json
 
 
-_LINE_PROCESSORS = {
+_LINE_PROCESSORS: dict[str, Callable[[StreamProcessor, StreamData], bool]] = {
     "codex": StreamProcessor._process_codex_line,
     "claude": StreamProcessor._process_result_line,
     "cursor-agent": StreamProcessor._process_result_line,

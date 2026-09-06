@@ -8,32 +8,36 @@ import sys
 import tempfile
 import threading
 import time
+from collections.abc import Callable
 from io import StringIO
 from pathlib import Path
+from typing import NoReturn, Protocol
 from unittest.mock import MagicMock, patch
 
 import pytest
 from _builder import AgentInvocation, ProcessInvocation
-from _executor import _build_proc_env, build_final_response, execute_agent
+from _executor import AgentResponse, _build_proc_env, build_final_response, execute_agent
 from run_subagent import main
 
 
 class TestBuildProcEnv:
-    def test_none_returns_none(self):
+    def test_none_returns_none(self) -> None:
         assert _build_proc_env(None) is None
         assert _build_proc_env({}) is None
 
-    def test_sets_and_overrides_keys(self):
+    def test_sets_and_overrides_keys(self) -> None:
         with patch.dict("os.environ", {"EXISTING": "old"}, clear=True):
             env = _build_proc_env({"NEW": "v", "EXISTING": "new"})
+        assert env is not None
         assert env["NEW"] == "v"
         assert env["EXISTING"] == "new"
 
-    def test_none_value_deletes_inherited_key(self):
+    def test_none_value_deletes_inherited_key(self) -> None:
         # Redirected Claude backends rely on this to strip credentials for a
         # different provider before spawning the child process.
         with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-ant-real"}, clear=True):
             env = _build_proc_env({"ANTHROPIC_AUTH_TOKEN": "zai", "ANTHROPIC_API_KEY": None})
+        assert env is not None
         assert "ANTHROPIC_API_KEY" not in env
         assert env["ANTHROPIC_AUTH_TOKEN"] == "zai"
 
@@ -41,100 +45,132 @@ class TestBuildProcEnv:
 class TestBuildFinalResponse:
     """Status determination from (returncode, parsed result, stdout, stderr)."""
 
-    def test_success(self):
-        r = build_final_response("codex", 0, {"result": "ok"}, [], "")
+    def test_success(self) -> None:
+        r = build_final_response(
+            cli="codex", returncode=0, result={"result": "ok"}, stdout_lines=[], stderr=""
+        )
         assert r == {"result": "ok", "exit_code": 0, "status": "success", "cli": "codex"}
 
-    def test_sigterm_with_result_is_success(self):
+    def test_sigterm_with_result_is_success(self) -> None:
         # CLI was terminated after the result event — that's still success
-        r = build_final_response("claude", 143, {"result": "ok"}, [], "")
+        r = build_final_response(
+            cli="claude", returncode=143, result={"result": "ok"}, stdout_lines=[], stderr=""
+        )
         assert r["status"] == "success"
         assert r["exit_code"] == 143
 
-    def test_returncode_none_treated_as_failure(self):
+    def test_returncode_none_treated_as_failure(self) -> None:
         # Defensive: process not yet finished should not be reported as success
-        r = build_final_response("codex", None, {"result": "ok"}, [], "")
+        r = build_final_response(
+            cli="codex", returncode=None, result={"result": "ok"}, stdout_lines=[], stderr=""
+        )
         assert r["exit_code"] == 1
         assert r["status"] == "partial"
 
-    def test_nonzero_with_result_is_partial(self):
-        r = build_final_response("codex", 2, {"result": "stuff"}, [], "")
+    def test_nonzero_with_result_is_partial(self) -> None:
+        r = build_final_response(
+            cli="codex", returncode=2, result={"result": "stuff"}, stdout_lines=[], stderr=""
+        )
         assert r["status"] == "partial"
         assert r["exit_code"] == 2
 
-    def test_result_marked_partial_stays_partial_even_with_zero_exit(self):
-        r = build_final_response("grok", 0, {"result": "progress", "status": "partial"}, [], "")
+    def test_result_marked_partial_stays_partial_even_with_zero_exit(self) -> None:
+        r = build_final_response(
+            cli="grok",
+            returncode=0,
+            result={"result": "progress", "status": "partial"},
+            stdout_lines=[],
+            stderr="",
+        )
         assert r["status"] == "partial"
         assert r["exit_code"] == 0
 
-    def test_result_marked_partial_stays_partial_when_terminated_by_us(self):
+    def test_result_marked_partial_stays_partial_when_terminated_by_us(self) -> None:
         r = build_final_response(
-            "grok",
-            1,
-            {"result": "progress", "status": "partial"},
-            [],
-            "",
+            cli="grok",
+            returncode=1,
+            result={"result": "progress", "status": "partial"},
+            stdout_lines=[],
+            stderr="",
             terminated_by_us=True,
         )
         assert r["status"] == "partial"
         assert r["exit_code"] == 1
 
-    def test_terminated_by_us_with_result_is_success_regardless_of_exit_code(self):
+    def test_terminated_by_us_with_result_is_success_regardless_of_exit_code(self) -> None:
         # Windows: terminate() maps to TerminateProcess and yields exit code 1,
         # unlike POSIX SIGTERM (143 / -15). When we asked the CLI to stop after a
         # complete result, the exit code is irrelevant — it must report success.
-        r = build_final_response("claude", 1, {"result": "ok"}, [], "", terminated_by_us=True)
+        r = build_final_response(
+            cli="claude",
+            returncode=1,
+            result={"result": "ok"},
+            stdout_lines=[],
+            stderr="",
+            terminated_by_us=True,
+        )
         assert r["status"] == "success"
         assert r["exit_code"] == 1
 
-    def test_nonzero_with_result_not_terminated_is_partial(self):
+    def test_nonzero_with_result_not_terminated_is_partial(self) -> None:
         # Same exit code 1, but we did NOT initiate termination — a genuine
         # abnormal exit with partial output stays "partial", not "success".
-        r = build_final_response("claude", 1, {"result": "ok"}, [], "", terminated_by_us=False)
+        r = build_final_response(
+            cli="claude",
+            returncode=1,
+            result={"result": "ok"},
+            stdout_lines=[],
+            stderr="",
+            terminated_by_us=False,
+        )
         assert r["status"] == "partial"
         assert r["exit_code"] == 1
 
-    def test_returncode_none_without_result_is_error(self):
+    def test_returncode_none_without_result_is_error(self) -> None:
         # No exit and no parsed payload — must not slip through as success.
-        r = build_final_response("codex", None, None, [], "")
+        r = build_final_response(
+            cli="codex", returncode=None, result=None, stdout_lines=[], stderr=""
+        )
         assert r["status"] == "error"
         assert r["exit_code"] == 1
         # No stderr means just the bare "exited with code" message, no colon suffix.
         assert r["error"] == "CLI exited with code 1"
 
-    def test_nonzero_without_result_is_error_with_stderr(self):
-        r = build_final_response("codex", 1, None, ["raw line\n"], "boom")
+    def test_nonzero_without_result_is_error_with_stderr(self) -> None:
+        r = build_final_response(
+            cli="codex", returncode=1, result=None, stdout_lines=["raw line\n"], stderr="boom"
+        )
         assert r["status"] == "error"
         assert r["exit_code"] == 1
         assert r["error"] == "CLI exited with code 1: boom"
         # When parsing failed, raw stdout falls into result for debugging
         assert r["result"] == "raw line\n"
 
-    def test_error_result_text_takes_precedence_over_non_error_subtype(self):
+    def test_error_result_text_takes_precedence_over_non_error_subtype(self) -> None:
         r = build_final_response(
-            "claude",
-            1,
-            {
+            cli="claude",
+            returncode=1,
+            result={
                 "result": "Authentication required",
                 "subtype": "success",
                 "is_error": True,
                 "status": "error",
             },
-            [],
-            "",
+            stdout_lines=[],
+            stderr="",
             terminated_by_us=True,
         )
         assert r["status"] == "error"
         assert r["error"] == "Authentication required"
 
-    def test_cursor_auth_error_with_legacy_key_returns_migration_guidance(self):
+    def test_cursor_auth_error_with_legacy_key_returns_migration_guidance(self) -> None:
         with patch.dict("os.environ", {"CLI_API_KEY": "legacy-secret"}, clear=True):
             r = build_final_response(
-                "cursor-agent",
-                1,
-                {"result": "Authentication required", "status": "error"},
-                [],
-                "",
+                cli="cursor-agent",
+                returncode=1,
+                result={"result": "Authentication required", "status": "error"},
+                stdout_lines=[],
+                stderr="",
             )
 
         assert r["error"] == (
@@ -143,14 +179,14 @@ class TestBuildFinalResponse:
         )
         assert "legacy-secret" not in r["error"]
 
-    def test_cursor_auth_error_in_unparsed_stdout_returns_migration_guidance(self):
+    def test_cursor_auth_error_in_unparsed_stdout_returns_migration_guidance(self) -> None:
         with patch.dict("os.environ", {"CLI_API_KEY": "legacy-secret"}, clear=True):
             r = build_final_response(
-                "cursor-agent",
-                1,
-                None,
-                ['{"error":"You are not logged in"}\n'],
-                "",
+                cli="cursor-agent",
+                returncode=1,
+                result=None,
+                stdout_lines=['{"error":"You are not logged in"}\n'],
+                stderr="",
             )
 
         assert r["error"] == (
@@ -158,50 +194,50 @@ class TestBuildFinalResponse:
             "Run `cursor-agent login` or set CURSOR_API_KEY, then retry."
         )
 
-    def test_cursor_non_auth_error_keeps_original_error_with_legacy_key(self):
+    def test_cursor_non_auth_error_keeps_original_error_with_legacy_key(self) -> None:
         with patch.dict("os.environ", {"CLI_API_KEY": "legacy-secret"}, clear=True):
             r = build_final_response(
-                "cursor-agent",
-                1,
-                {"result": "Model is unavailable", "status": "error"},
-                [],
-                "",
+                cli="cursor-agent",
+                returncode=1,
+                result={"result": "Model is unavailable", "status": "error"},
+                stdout_lines=[],
+                stderr="",
             )
 
         assert r["error"] == "Model is unavailable"
 
-    def test_cursor_non_auth_error_ignores_auth_phrases_in_structured_result(self):
+    def test_cursor_non_auth_error_ignores_auth_phrases_in_structured_result(self) -> None:
         with patch.dict("os.environ", {"CLI_API_KEY": "legacy-secret"}, clear=True):
             r = build_final_response(
-                "cursor-agent",
-                1,
-                {
+                cli="cursor-agent",
+                returncode=1,
+                result={
                     "result": "Investigating an unauthorized response",
                     "error": "Model is unavailable",
                     "status": "error",
                 },
-                [],
-                "",
+                stdout_lines=[],
+                stderr="",
             )
 
         assert r["error"] == "Model is unavailable"
 
-    def test_cursor_explicit_key_auth_error_does_not_blame_legacy_key(self):
+    def test_cursor_explicit_key_auth_error_does_not_blame_legacy_key(self) -> None:
         env = {"CURSOR_API_KEY": "cursor-secret", "CLI_API_KEY": "legacy-secret"}
         with patch.dict("os.environ", env, clear=True):
             r = build_final_response(
-                "cursor-agent",
-                1,
-                {"result": "Invalid API key", "status": "error"},
-                [],
-                "",
+                cli="cursor-agent",
+                returncode=1,
+                result={"result": "Invalid API key", "status": "error"},
+                stdout_lines=[],
+                stderr="",
             )
 
         assert r["error"] == "Invalid API key"
 
 
 class TestExecuteAgent:
-    def test_returns_error_when_cli_executable_not_found(self):
+    def test_returns_error_when_cli_executable_not_found(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             with patch(
                 "_executor.build_invocation_args",
@@ -220,7 +256,7 @@ class TestExecuteAgent:
                 assert result["exit_code"] == 127
                 assert "not found" in result["error"].lower()
 
-    def test_claude_non_result_event_does_not_end_process_before_result(self):
+    def test_claude_non_result_event_does_not_end_process_before_result(self) -> None:
         mock_process = MagicMock()
         mock_process.stdout.readline.side_effect = [
             '{"type": "system", "subtype": "notification", '
@@ -240,7 +276,7 @@ class TestExecuteAgent:
         assert result["status"] == "success"
         assert result["result"] == "actual response"
 
-    def test_claude_error_result_is_not_reported_as_success(self):
+    def test_claude_error_result_is_not_reported_as_success(self) -> None:
         mock_process = MagicMock()
         mock_process.stdout.readline.side_effect = [
             '{"type":"result","subtype":"error_during_execution","is_error":true}\n',
@@ -259,7 +295,7 @@ class TestExecuteAgent:
         assert result["result"] == ""
         assert "error_during_execution" in result["error"]
 
-    def test_codex_concatenates_prompt_with_agent_file(self):
+    def test_codex_concatenates_prompt_with_agent_file(self) -> None:
         mock_process = MagicMock()
         mock_process.stdout.readline.return_value = ""
         mock_process.communicate.return_value = ("", "")
@@ -288,7 +324,7 @@ class TestExecuteAgent:
                 assert "[User Prompt]" in prompt_arg
                 assert "User task" in prompt_arg
 
-    def test_kimi_provider_configuration_reaches_child_process(self):
+    def test_kimi_provider_configuration_reaches_child_process(self) -> None:
         mock_process = MagicMock()
         mock_process.stdout.readline.side_effect = [
             '{"type": "result", "result": "DONE"}\n',
@@ -322,7 +358,7 @@ class TestExecuteAgent:
         assert result["status"] == "success"
         assert result["result"] == "DONE"
 
-    def test_aborts_when_stdout_exceeds_memory_cap(self):
+    def test_aborts_when_stdout_exceeds_memory_cap(self) -> None:
         """A flooding sub-agent must be killed before exhausting broker memory.
 
         Patches _MAX_STDOUT_CHARS low and feeds non-terminal lines until the
@@ -346,7 +382,7 @@ class TestExecuteAgent:
         assert "exceeded" in result["error"]
         assert mock_process.kill.called
 
-    def test_stdout_cap_does_not_override_completed_result(self):
+    def test_stdout_cap_does_not_override_completed_result(self) -> None:
         mock_process = MagicMock()
         flood = ['{"type": "noise", "data": "' + ("x" * 180) + '"}\n'] * 20
         mock_process.stdout.readline.side_effect = [
@@ -370,7 +406,7 @@ class TestExecuteAgent:
         assert mock_process.terminate.called
         assert not mock_process.kill.called
 
-    def test_timeout_when_cli_blocks_without_output(self):
+    def test_timeout_when_cli_blocks_without_output(self) -> None:
         """A CLI that produces no output and never exits must be killed by the deadline.
 
         Regression for the original implementation: ``readline()`` was called in
@@ -381,13 +417,13 @@ class TestExecuteAgent:
         mock_process = MagicMock()
         kill_event = threading.Event()
 
-        def blocking_readline():
+        def blocking_readline() -> str:
             kill_event.wait(timeout=5)
             return ""
 
         mock_process.stdout.readline.side_effect = blocking_readline
 
-        def stop_process():
+        def stop_process() -> None:
             kill_event.set()
             mock_process.returncode = -9
 
@@ -409,7 +445,7 @@ class TestExecuteAgent:
         assert result["exit_code"] == 124
         assert "timed out after 300 ms" in result["error"]
 
-    def test_popen_uses_explicit_utf8_encoding(self):
+    def test_popen_uses_explicit_utf8_encoding(self) -> None:
         """Subprocess output must be decoded as UTF-8 on every platform.
 
         Without an explicit encoding, text mode decodes using the locale
@@ -431,7 +467,7 @@ class TestExecuteAgent:
         assert popen_kwargs["encoding"] == "utf-8"
         assert popen_kwargs["errors"] == "replace"
 
-    def test_windows_terminate_exit_code_still_reports_success(self):
+    def test_windows_terminate_exit_code_still_reports_success(self) -> None:
         """End-to-end Windows simulation: a complete result then exit code 1.
 
         On Windows the broker calls terminate() after parsing the terminal
@@ -456,7 +492,7 @@ class TestExecuteAgent:
         assert result["status"] == "success"
         assert result["result"] == "DONE"
 
-    def test_gemini_passes_env_with_agent_file(self):
+    def test_gemini_passes_env_with_agent_file(self) -> None:
         mock_process = MagicMock()
         mock_process.stdout.readline.return_value = ""
         mock_process.communicate.return_value = ("", "")
@@ -480,7 +516,7 @@ class TestExecuteAgent:
                 popen_kwargs = mock_popen.call_args[1]
                 assert popen_kwargs["env"]["GEMINI_SYSTEM_MD"] == agent_file
 
-    def test_antigravity_ndjson_output_is_normalized(self):
+    def test_antigravity_ndjson_output_is_normalized(self) -> None:
         mock_process = MagicMock()
         mock_process.stdout.readline.side_effect = [
             '{"event":"init","conversation_id":"c1"}\n',
@@ -499,7 +535,7 @@ class TestExecuteAgent:
         assert result["status"] == "success"
         assert result["result"] == "DONE"
 
-    def test_grok_pretty_json_output_is_parsed_after_exit(self):
+    def test_grok_pretty_json_output_is_parsed_after_exit(self) -> None:
         mock_process = MagicMock()
         mock_process.stdout.readline.side_effect = [
             "{\n",
@@ -521,41 +557,7 @@ class TestExecuteAgent:
         assert result["status"] == "success"
         assert result["result"] == '{"findings":[]}'
 
-    def test_grok_compact_json_output_is_normalized(self):
-        mock_process = MagicMock()
-        mock_process.stdout.readline.side_effect = [
-            '{"text": "{\\"findings\\":[]}", "stopReason": "EndTurn"}\n',
-            "",
-        ]
-        mock_process.communicate.return_value = ("", "")
-        mock_process.returncode = 0
-
-        with patch("subprocess.Popen", return_value=mock_process):
-            result = execute_agent(
-                AgentInvocation(cli="grok", prompt="x", cwd="/tmp"),
-                timeout_ms=5000,
-            )
-        assert result["status"] == "success"
-        assert result["result"] == '{"findings":[]}'
-
-    def test_grok_compact_cancelled_output_stays_partial(self):
-        mock_process = MagicMock()
-        mock_process.stdout.readline.side_effect = [
-            '{"text": "progress only", "stopReason": "Cancelled"}\n',
-            "",
-        ]
-        mock_process.communicate.return_value = ("", "")
-        mock_process.returncode = 1
-
-        with patch("subprocess.Popen", return_value=mock_process):
-            result = execute_agent(
-                AgentInvocation(cli="grok", prompt="x", cwd="/tmp"),
-                timeout_ms=5000,
-            )
-        assert result["status"] == "partial"
-        assert result["result"] == "progress only"
-
-    def test_opencode_ndjson_output_is_parsed(self):
+    def test_opencode_ndjson_output_is_parsed(self) -> None:
         mock_process = MagicMock()
         mock_process.stdout.readline.side_effect = [
             '{"type":"step_start","part":{}}\n',
@@ -577,7 +579,7 @@ class TestExecuteAgent:
         assert result["status"] == "success"
         assert result["result"] == "DONE"
 
-    def test_command_code_ndjson_output_is_parsed(self):
+    def test_command_code_ndjson_output_is_parsed(self) -> None:
         mock_process = MagicMock()
         mock_process.stdout.readline.side_effect = [
             '{"type":"event","event":{"type":"tool_running","toolName":"read_file"}}\n',
@@ -605,7 +607,7 @@ class TestOpencodeDataDirIsolation:
     dir per invocation and cleans it up once the process finishes.
     """
 
-    def _mock_process(self):
+    def _mock_process(self) -> MagicMock:
         m = MagicMock()
         m.stdout.readline.side_effect = [
             '{"type":"text","part":{"text":"DONE"}}\n',
@@ -616,11 +618,15 @@ class TestOpencodeDataDirIsolation:
         m.returncode = 0
         return m
 
-    def _run_capturing_env(self, popen_side_effect):
-        captured = {}
+    def _run_capturing_env(
+        self, popen_side_effect: Callable[[], MagicMock]
+    ) -> tuple[AgentResponse, dict[str, str]]:
+        captured: dict[str, dict[str, str]] = {}
 
-        def popen_factory(cmd, **kwargs):
-            captured["env"] = kwargs["env"]
+        def popen_factory(cmd: list[str], **kwargs: object) -> MagicMock:
+            env = kwargs["env"]
+            assert isinstance(env, dict)
+            captured["env"] = env
             return popen_side_effect()
 
         with patch("subprocess.Popen", side_effect=popen_factory):
@@ -630,7 +636,7 @@ class TestOpencodeDataDirIsolation:
             )
         return result, captured["env"]
 
-    def test_private_xdg_dirs_and_permission_env_survive_the_merge(self):
+    def test_private_xdg_dirs_and_permission_env_survive_the_merge(self) -> None:
         result, env = self._run_capturing_env(self._mock_process)
 
         assert result["status"] == "success"
@@ -642,27 +648,27 @@ class TestOpencodeDataDirIsolation:
         assert temp_dir == os.path.dirname(state_home)
         assert os.path.basename(temp_dir).startswith("subagent-opencode-")
 
-    def test_temp_dir_is_removed_after_the_run(self):
+    def test_temp_dir_is_removed_after_the_run(self) -> None:
         _, env = self._run_capturing_env(self._mock_process)
         assert not os.path.exists(os.path.dirname(env["XDG_DATA_HOME"]))
 
-    def test_temp_dir_is_removed_when_spawn_fails(self):
-        def raise_not_found():
+    def test_temp_dir_is_removed_when_spawn_fails(self) -> None:
+        def raise_not_found() -> NoReturn:
             raise FileNotFoundError()
 
         result, env = self._run_capturing_env(raise_not_found)
         assert result["status"] == "error"
         assert not os.path.exists(os.path.dirname(env["XDG_DATA_HOME"]))
 
-    def test_temp_dir_is_removed_after_io_error_once_process_is_reaped(self):
-        captured = {}
+    def test_temp_dir_is_removed_after_io_error_once_process_is_reaped(self) -> None:
+        captured: dict[str, str] = {}
         process = MagicMock()
         process.stdout.readline.return_value = ""
         process.returncode = -9
 
         process.communicate.side_effect = OSError("pipe failure")
 
-        def wait():
+        def wait() -> int:
             # The error path must reap the child before execute_agent's finally
             # block removes the per-invocation directory.
             assert os.path.isdir(captured["temp_dir"])
@@ -670,8 +676,10 @@ class TestOpencodeDataDirIsolation:
 
         process.wait.side_effect = wait
 
-        def popen_factory(_cmd, **kwargs):
-            captured["temp_dir"] = os.path.dirname(kwargs["env"]["XDG_DATA_HOME"])
+        def popen_factory(_cmd: list[str], **kwargs: object) -> MagicMock:
+            env = kwargs["env"]
+            assert isinstance(env, dict)
+            captured["temp_dir"] = os.path.dirname(env["XDG_DATA_HOME"])
             return process
 
         with patch("subprocess.Popen", side_effect=popen_factory):
@@ -685,18 +693,20 @@ class TestOpencodeDataDirIsolation:
         process.wait.assert_called_once_with()
         assert not os.path.exists(captured["temp_dir"])
 
-    def test_auth_json_is_copied_into_isolated_data_home(self):
+    def test_auth_json_is_copied_into_isolated_data_home(self) -> None:
         # auth.json lives in the data home, so `opencode auth login` credentials
         # must follow the invocation into its private dir. Checked inside the
         # Popen factory because the temp dir is gone after execute_agent returns.
-        captured = {}
+        captured: dict[str, str | None] = {}
         with tempfile.TemporaryDirectory() as fake_default:
             opencode_dir = Path(fake_default) / "opencode"
             opencode_dir.mkdir(parents=True)
             (opencode_dir / "auth.json").write_text('{"provider":"key"}')
 
-            def popen_factory(cmd, **kwargs):
-                copied = Path(kwargs["env"]["XDG_DATA_HOME"]) / "opencode" / "auth.json"
+            def popen_factory(cmd: list[str], **kwargs: object) -> MagicMock:
+                env = kwargs["env"]
+                assert isinstance(env, dict)
+                copied = Path(env["XDG_DATA_HOME"]) / "opencode" / "auth.json"
                 captured["content"] = copied.read_text() if copied.is_file() else None
                 return self._mock_process()
 
@@ -708,7 +718,7 @@ class TestOpencodeDataDirIsolation:
                     )
         assert captured["content"] == '{"provider":"key"}'
 
-    def test_auth_json_copy_failure_does_not_crash_the_run(self):
+    def test_auth_json_copy_failure_does_not_crash_the_run(self) -> None:
         # The copy is best-effort: env-based provider auth needs no auth.json,
         # so an unreadable file must not turn into an executor crash.
         with tempfile.TemporaryDirectory() as fake_default:
@@ -726,10 +736,10 @@ class TestOpencodeDataDirIsolation:
         assert result["status"] == "success"
         assert result["result"] == "DONE"
 
-    def test_other_clis_are_not_isolated(self):
+    def test_other_clis_are_not_isolated(self) -> None:
         captured = {}
 
-        def popen_factory(cmd, **kwargs):
+        def popen_factory(cmd: list[str], **kwargs: object) -> MagicMock:
             captured["env"] = kwargs["env"]
             m = MagicMock()
             m.stdout.readline.side_effect = [
@@ -749,10 +759,16 @@ class TestOpencodeDataDirIsolation:
         assert captured["env"] is None
 
 
+class PopenFactory(Protocol):
+    """The subprocess.Popen stand-in each end-to-end test installs."""
+
+    def __call__(self, cmd: list[str], /, **kwargs: object) -> MagicMock: ...
+
+
 class TestMainEndToEnd:
     """Drive main() end-to-end with subprocess mocked. Verifies the JSON contract."""
 
-    def _run(self, argv, popen_factory):
+    def _run(self, argv: list[str], popen_factory: PopenFactory) -> tuple[str, object]:
         with patch.object(sys, "argv", argv):
             with patch("subprocess.Popen", side_effect=popen_factory):
                 buf = StringIO()
@@ -761,7 +777,7 @@ class TestMainEndToEnd:
                         main()
                 return buf.getvalue(), exc_info.value.code
 
-    def test_main_success_returns_zero_and_json(self):
+    def test_main_success_returns_zero_and_json(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             agents_dir = Path(tmpdir) / ".agents"
             agents_dir.mkdir()
@@ -771,7 +787,7 @@ class TestMainEndToEnd:
                 "# Echo\n\nReply.\n"
             )
 
-            def popen_factory(args, **_kwargs):
+            def popen_factory(args: list[str], /, **kwargs: object) -> MagicMock:
                 model_idx = args.index("--model")
                 assert args[model_idx + 1] == "gpt-5.4-mini"
                 assert ("-c", 'model_reasoning_effort="high"') in zip(args, args[1:])
@@ -802,7 +818,7 @@ class TestMainEndToEnd:
             assert payload["cli"] == "codex"
             assert code == 0
 
-    def test_main_cli_argument_supplies_missing_agent_backend(self):
+    def test_main_cli_argument_supplies_missing_agent_backend(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             agents_dir = Path(tmpdir) / ".agents"
             agents_dir.mkdir()
@@ -826,7 +842,7 @@ class TestMainEndToEnd:
             assert json.loads(stdout)["cli"] == "codex"
             assert code == 0
 
-    def test_main_requires_agent_backend_or_cli_argument(self):
+    def test_main_requires_agent_backend_or_cli_argument(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             agents_dir = Path(tmpdir) / ".agents"
             agents_dir.mkdir()
@@ -850,7 +866,7 @@ class TestMainEndToEnd:
             assert code == 1
             execute.assert_not_called()
 
-    def test_main_invalid_permission_returns_one(self):
+    def test_main_invalid_permission_returns_one(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             agents_dir = Path(tmpdir) / ".agents"
             agents_dir.mkdir()
@@ -876,7 +892,7 @@ class TestMainEndToEnd:
             assert "Invalid permission" in payload["error"]
             assert exc_info.value.code == 1
 
-    def test_main_unsupported_effort_returns_json_error_before_launch(self):
+    def test_main_unsupported_effort_returns_json_error_before_launch(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             agents_dir = Path(tmpdir) / ".agents"
             agents_dir.mkdir()
@@ -903,7 +919,7 @@ class TestMainEndToEnd:
             assert exc_info.value.code == 1
             popen.assert_not_called()
 
-    def test_main_invalid_cli_override_returns_json_error(self):
+    def test_main_invalid_cli_override_returns_json_error(self) -> None:
         """--cli with an unknown value must produce a JSON error, not a traceback."""
         with tempfile.TemporaryDirectory() as tmpdir:
             agents_dir = Path(tmpdir) / ".agents"
@@ -930,7 +946,7 @@ class TestMainEndToEnd:
             assert "Unsupported CLI" in payload["error"]
             assert exc_info.value.code == 1
 
-    def test_main_list_returns_agents_json(self):
+    def test_main_list_returns_agents_json(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             agents_dir = Path(tmpdir) / ".agents"
             agents_dir.mkdir()

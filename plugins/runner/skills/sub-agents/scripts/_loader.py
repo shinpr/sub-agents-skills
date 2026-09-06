@@ -24,7 +24,7 @@ class AgentDefinition:
     effort: str | None
 
 
-def parse_frontmatter(content: str) -> tuple[dict, str]:
+def parse_frontmatter(content: str) -> tuple[dict[str, str], str]:
     """Parse flat YAML frontmatter and return its fields and body."""
     pattern = r"^---\s*\n(.*?)\n---\s*\n(.*)$"
     match = re.match(pattern, content, re.DOTALL)
@@ -110,10 +110,10 @@ def load_agent(agents_dir: str, agent_name: str) -> AgentDefinition:
     )
 
 
-def list_agents(agents_dir: str) -> list[dict]:
+def list_agents(agents_dir: str) -> list[dict[str, str]]:
     """List agent names and descriptions, preferring Markdown definitions."""
     agents_path = Path(agents_dir)
-    agents = []
+    agents: list[dict[str, str]] = []
     seen_names: set[str] = set()
 
     if not agents_path.exists():

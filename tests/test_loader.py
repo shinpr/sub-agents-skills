@@ -20,7 +20,7 @@ from _loader import (
 
 
 class TestParseFrontmatter:
-    def test_with_frontmatter(self):
+    def test_with_frontmatter(self) -> None:
         content = """---
 run-agent: claude
 ---
@@ -34,7 +34,7 @@ Body content here.
         assert "# Agent Name" in body
         assert "---" not in body
 
-    def test_without_frontmatter(self):
+    def test_without_frontmatter(self) -> None:
         content = """# Agent Name
 
 No frontmatter here.
@@ -45,83 +45,83 @@ No frontmatter here.
 
 
 class TestExtractDescription:
-    def test_extracts_first_non_heading_line(self):
+    def test_extracts_first_non_heading_line(self) -> None:
         body = "# Title\n\nThis is description.\n\nMore content."
         assert extract_description(body) == "This is description."
 
-    def test_returns_empty_for_headings_only(self):
+    def test_returns_empty_for_headings_only(self) -> None:
         body = "# Title\n## Subtitle"
         assert extract_description(body) == ""
 
-    def test_truncates_long_descriptions(self):
+    def test_truncates_long_descriptions(self) -> None:
         long_line = "a" * 150
         body = f"# Title\n\n{long_line}"
         result = extract_description(body)
         assert len(result) == 100
 
-    def test_empty_body(self):
+    def test_empty_body(self) -> None:
         assert extract_description("") == ""
 
 
 class TestLoadAgentRejectsInvalidNames:
     """load_agent should reject names that could escape the agents directory."""
 
-    def _make_agents_dir(self, tmpdir):
+    def _make_agents_dir(self, tmpdir: str) -> str:
         agents_dir = Path(tmpdir) / "agents"
         agents_dir.mkdir()
         (agents_dir / "valid-agent.md").write_text("# Valid\n\nA valid agent.")
         return str(agents_dir)
 
-    def test_loads_simple_hyphenated_name(self):
+    def test_loads_simple_hyphenated_name(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             agents_dir = self._make_agents_dir(tmpdir)
             agent = load_agent(agents_dir, "valid-agent")
             assert "Valid" in agent.system_context
             assert agent.file_path.endswith("valid-agent.md")
 
-    def test_rejects_parent_directory_traversal(self):
+    def test_rejects_parent_directory_traversal(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             agents_dir = self._make_agents_dir(tmpdir)
             with pytest.raises(ValueError, match="Invalid agent name"):
                 load_agent(agents_dir, "../etc/passwd")
 
-    def test_rejects_nested_traversal(self):
+    def test_rejects_nested_traversal(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             agents_dir = self._make_agents_dir(tmpdir)
             with pytest.raises(ValueError, match="Invalid agent name"):
                 load_agent(agents_dir, "../../secret")
 
-    def test_rejects_absolute_path(self):
+    def test_rejects_absolute_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             agents_dir = self._make_agents_dir(tmpdir)
             with pytest.raises(ValueError, match="Invalid agent name"):
                 load_agent(agents_dir, "/etc/passwd")
 
-    def test_rejects_forward_slash(self):
+    def test_rejects_forward_slash(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             agents_dir = self._make_agents_dir(tmpdir)
             with pytest.raises(ValueError, match="Invalid agent name"):
                 load_agent(agents_dir, "sub/agent")
 
-    def test_rejects_backslash(self):
+    def test_rejects_backslash(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             agents_dir = self._make_agents_dir(tmpdir)
             with pytest.raises(ValueError, match="Invalid agent name"):
                 load_agent(agents_dir, "sub\\agent")
 
-    def test_rejects_empty_string(self):
+    def test_rejects_empty_string(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             agents_dir = self._make_agents_dir(tmpdir)
             with pytest.raises(ValueError, match="Invalid agent name"):
                 load_agent(agents_dir, "")
 
-    def test_rejects_shell_metacharacters(self):
+    def test_rejects_shell_metacharacters(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             agents_dir = self._make_agents_dir(tmpdir)
             with pytest.raises(ValueError, match="Invalid agent name"):
                 load_agent(agents_dir, "agent;rm -rf")
 
-    def test_rejects_leading_dot(self):
+    def test_rejects_leading_dot(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             agents_dir = self._make_agents_dir(tmpdir)
             with pytest.raises(ValueError, match="Invalid agent name"):
@@ -129,7 +129,7 @@ class TestLoadAgentRejectsInvalidNames:
 
 
 class TestLoadAgent:
-    def test_load_agent_md(self):
+    def test_load_agent_md(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             agent_file = Path(tmpdir) / "test-agent.md"
             agent_file.write_text("""---
@@ -152,13 +152,13 @@ Do something.
             assert agent.model is None
             assert agent.effort is None
 
-    def test_agent_not_found(self):
+    def test_agent_not_found(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir, pytest.raises(FileNotFoundError):
             load_agent(tmpdir, "nonexistent")
 
 
 class TestListAgents:
-    def test_list_multiple_agents(self):
+    def test_list_multiple_agents(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             (Path(tmpdir) / "agent-a.md").write_text("# Agent A\n\nFirst agent.")
             (Path(tmpdir) / "agent-b.md").write_text("# Agent B\n\nSecond agent.")
@@ -168,27 +168,27 @@ class TestListAgents:
             assert "agent-a" in names
             assert "agent-b" in names
 
-    def test_list_empty_directory(self):
+    def test_list_empty_directory(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             agents = list_agents(tmpdir)
             assert agents == []
 
-    def test_list_nonexistent_directory(self):
+    def test_list_nonexistent_directory(self) -> None:
         agents = list_agents("/nonexistent/path")
         assert agents == []
 
 
 class TestGetAgentsDir:
-    def test_args_priority(self):
+    def test_args_priority(self) -> None:
         result = get_agents_dir("/custom/path", "/some/cwd")
         assert result == "/custom/path"
 
-    def test_env_priority(self):
+    def test_env_priority(self) -> None:
         with patch.dict("os.environ", {"SUB_AGENTS_DIR": "/env/path"}):
             result = get_agents_dir(None, "/some/cwd")
             assert result == "/env/path"
 
-    def test_cwd_fallback(self):
+    def test_cwd_fallback(self) -> None:
         result = get_agents_dir(None, "/some/cwd")
         # get_agents_dir builds the path with pathlib, so the separator is
         # platform-native ("/" on POSIX, "\\" on Windows). Compare against the
@@ -197,33 +197,33 @@ class TestGetAgentsDir:
 
 
 class TestValidatePermission:
-    def test_returns_default_for_none(self):
+    def test_returns_default_for_none(self) -> None:
         assert validate_permission(None) == DEFAULT_PERMISSION
 
-    def test_returns_default_for_empty_string(self):
+    def test_returns_default_for_empty_string(self) -> None:
         assert validate_permission("") == DEFAULT_PERMISSION
 
-    def test_accepts_valid_values(self):
+    def test_accepts_valid_values(self) -> None:
         for value in PERMISSION_VALUES:
             assert validate_permission(value) == value
 
-    def test_rejects_invalid_value(self):
+    def test_rejects_invalid_value(self) -> None:
         with pytest.raises(ValueError, match="Invalid permission"):
             validate_permission("dangerous")
 
-    def test_rejects_typo(self):
+    def test_rejects_typo(self) -> None:
         with pytest.raises(ValueError, match="Invalid permission"):
             validate_permission("readonly")
 
 
 class TestLoadAgentPermission:
-    def test_default_permission_when_omitted(self):
+    def test_default_permission_when_omitted(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             (Path(tmpdir) / "a.md").write_text("---\nrun-agent: codex\n---\n# A\n")
             agent = load_agent(tmpdir, "a")
             assert agent.permission == DEFAULT_PERMISSION
 
-    def test_explicit_read_only(self):
+    def test_explicit_read_only(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             (Path(tmpdir) / "a.md").write_text(
                 "---\nrun-agent: codex\npermission: read-only\n---\n# A\n"
@@ -231,7 +231,7 @@ class TestLoadAgentPermission:
             agent = load_agent(tmpdir, "a")
             assert agent.permission == "read-only"
 
-    def test_explicit_yolo(self):
+    def test_explicit_yolo(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             (Path(tmpdir) / "a.md").write_text(
                 "---\nrun-agent: claude\npermission: yolo\n---\n# A\n"
@@ -239,7 +239,7 @@ class TestLoadAgentPermission:
             agent = load_agent(tmpdir, "a")
             assert agent.permission == "yolo"
 
-    def test_invalid_permission_raises(self):
+    def test_invalid_permission_raises(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             (Path(tmpdir) / "a.md").write_text(
                 "---\nrun-agent: codex\npermission: dangerous\n---\n# A\n"
@@ -249,7 +249,7 @@ class TestLoadAgentPermission:
 
 
 class TestLoadAgentModel:
-    def test_model_when_specified(self):
+    def test_model_when_specified(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             (Path(tmpdir) / "a.md").write_text(
                 "---\nrun-agent: opencode\nmodel: test-provider/test-model\n---\n# A\n"
@@ -258,7 +258,7 @@ class TestLoadAgentModel:
             assert agent.model == "test-provider/test-model"
 
     @pytest.mark.parametrize("value", ["", "''", '""'])
-    def test_empty_model_uses_cli_default(self, value):
+    def test_empty_model_uses_cli_default(self, value: str) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             (Path(tmpdir) / "a.md").write_text(f"---\nrun-agent: codex\nmodel: {value}\n---\n# A\n")
             agent = load_agent(tmpdir, "a")
@@ -266,7 +266,7 @@ class TestLoadAgentModel:
 
 
 class TestLoadAgentEffort:
-    def test_effort_when_specified(self):
+    def test_effort_when_specified(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             (Path(tmpdir) / "a.md").write_text(
                 "---\nrun-agent: glm\nmodel: glm-5.2\neffort: max\n---\n# A\n"
@@ -275,7 +275,7 @@ class TestLoadAgentEffort:
             assert agent.effort == "max"
 
     @pytest.mark.parametrize("value", ["", "''", '""'])
-    def test_empty_effort_is_omitted(self, value):
+    def test_empty_effort_is_omitted(self, value: str) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             (Path(tmpdir) / "a.md").write_text(
                 f"---\nrun-agent: codex\neffort: {value}\n---\n# A\n"

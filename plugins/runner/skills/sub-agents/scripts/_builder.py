@@ -168,7 +168,7 @@ def effort_flags(cli: str, effort: str | None) -> list[str]:
     )
 
 
-def _invocation_flags(inv: AgentInvocation) -> list:
+def _invocation_flags(inv: AgentInvocation) -> list[str]:
     flags = permission_flags(inv.cli, inv.permission)
     if inv.model:
         flags.extend(["--model", inv.model])
@@ -235,7 +235,9 @@ def _build_opencode_args(inv: AgentInvocation) -> ProcessInvocation:
     perm = _invocation_flags(inv)
     formatted_prompt = format_concatenated_prompt(inv.system_context, inv.prompt)
     command, base_args = build_command(inv.cli, formatted_prompt)
-    env_override = {"OPENCODE_PERMISSION": json.dumps(_OPENCODE_PERMISSION_MAPPING[inv.permission])}
+    env_override: dict[str, str | None] = {
+        "OPENCODE_PERMISSION": json.dumps(_OPENCODE_PERMISSION_MAPPING[inv.permission])
+    }
     return ProcessInvocation(command, perm + base_args, env_override)
 
 
