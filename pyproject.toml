@@ -8,7 +8,8 @@ dependencies = []
 dev = [
     "pre-commit>=3.0",
     "pytest>=8.0",
-    "ruff>=0.4",
+    "mypy>=1.17",
+    "ruff>=0.13",
     "tomli>=1.1",
 ]
 
@@ -17,6 +18,10 @@ target-version = "py39"
 line-length = 100
 
 [tool.ruff.lint]
+# PLR1702 is a preview rule; explicit-preview-rules keeps every other preview
+# rule off so a ruff upgrade cannot introduce unrelated failures.
+preview = true
+explicit-preview-rules = true
 select = [
     "E",      # pycodestyle errors
     "W",      # pycodestyle warnings
@@ -26,11 +31,30 @@ select = [
     "C4",     # flake8-comprehensions
     "UP",     # pyupgrade
     "SIM",    # flake8-simplify
+    "ANN",    # flake8-annotations — type contracts on every function
+    "B904",   # raise ... from — keep the causing exception
+    "ERA001", # no commented-out code left behind
+    "FBT001", # no positional bool parameters
+    "FBT002",
+    "PGH003", # no blanket type: ignore
+    "PGH004", # no blanket noqa
+    "PLR0913",# argument count (see max-args below)
+    "PLR1702",# nesting depth (see max-nested-blocks below)
+    "PT011",  # pytest.raises must not be overly broad
+    "RUF100", # no stale noqa
+    "S603",   # subprocess call sites must justify themselves
 ]
 ignore = [
     "E501",   # line too long (handled by formatter)
     "SIM117", # nested with — combining requires parenthesized syntax (3.10+)
 ]
+
+[tool.ruff.lint.pylint]
+# Complexity is bounded by nesting depth, not branch or statement count: adding
+# a CLI backend grows the flat guard clauses without growing what a reader holds,
+# so C901/PLR0912/PLR0915 would fire on healthy growth.
+max-nested-blocks = 4
+max-args = 4
 
 [tool.ruff.format]
 quote-style = "double"

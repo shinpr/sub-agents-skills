@@ -13,7 +13,7 @@ except ModuleNotFoundError:
 REPO_ROOT = Path(__file__).parent.parent
 
 
-def test_codex_marketplace_uses_non_root_plugin_path():
+def test_codex_marketplace_uses_non_root_plugin_path() -> None:
     marketplace = json.loads((REPO_ROOT / ".agents" / "plugins" / "marketplace.json").read_text())
 
     [plugin] = marketplace["plugins"]
@@ -25,7 +25,7 @@ def test_codex_marketplace_uses_non_root_plugin_path():
     }
 
 
-def test_codex_plugin_manifest_points_to_copied_skills():
+def test_codex_plugin_manifest_points_to_copied_skills() -> None:
     plugin_root = REPO_ROOT / "plugins" / "runner"
     manifest = json.loads((plugin_root / ".codex-plugin" / "plugin.json").read_text())
 
@@ -36,7 +36,7 @@ def test_codex_plugin_manifest_points_to_copied_skills():
     assert (skills_path / "sub-agents" / "SKILL.md").is_file()
 
 
-def test_grok_marketplace_uses_non_root_plugin_path():
+def test_grok_marketplace_uses_non_root_plugin_path() -> None:
     marketplace = json.loads((REPO_ROOT / ".grok-plugin" / "marketplace.json").read_text())
 
     [plugin] = marketplace["plugins"]
@@ -48,7 +48,7 @@ def test_grok_marketplace_uses_non_root_plugin_path():
     }
 
 
-def test_grok_plugin_manifest_points_to_copied_skills():
+def test_grok_plugin_manifest_points_to_copied_skills() -> None:
     plugin_root = REPO_ROOT / "plugins" / "runner"
     manifest = json.loads((plugin_root / "plugin.json").read_text())
 
@@ -59,7 +59,7 @@ def test_grok_plugin_manifest_points_to_copied_skills():
     assert (skills_path / "sub-agents" / "SKILL.md").is_file()
 
 
-def test_codex_plugin_default_prompt_uses_namespaced_skill():
+def test_codex_plugin_default_prompt_uses_namespaced_skill() -> None:
     metadata = (
         REPO_ROOT / "plugins" / "runner" / "skills" / "sub-agents" / "agents" / "openai.yaml"
     ).read_text()
@@ -68,7 +68,7 @@ def test_codex_plugin_default_prompt_uses_namespaced_skill():
     assert "Use $sub-agents" not in metadata
 
 
-def test_manifest_versions_match_project_version():
+def test_manifest_versions_match_project_version() -> None:
     project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())
     project_version = project["project"]["version"]
     manifest_paths = [
