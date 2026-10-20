@@ -84,7 +84,9 @@ def build_command(cli: str, prompt: str) -> tuple[str, list[str]]:
         return "mcode", ["exec", "--output-format", "json", "--", prompt]
 
     if cli == "pi":
-        return "pi", ["--no-session", "--mode", "json", "--print", "--", prompt]
+        # Pi attaches an argument starting with @ as a file, even after --.
+        message = f" {prompt}" if prompt.startswith("@") else prompt
+        return "pi", ["--no-session", "--mode", "json", "--print", "--", message]
 
     if cli == "cursor-agent":
         # Cursor credentials stay out of argv.

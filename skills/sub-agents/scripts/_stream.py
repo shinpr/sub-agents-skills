@@ -235,18 +235,13 @@ class StreamProcessor:
         if data.get("type") != "exec.result":
             return False
 
-        backend_status = data.get("status")
         output = data.get("output")
-        text = output if isinstance(output, str) else ""
-        if backend_status == "succeeded":
-            status = "success"
-        elif backend_status in ("timeout", "cancelled", "limit_exceeded") and text:
-            status = "partial"
-        else:
-            # Unfinished runs usually omit output and leave the reason on stderr.
-            status = "error"
-
-        result: StreamData = {"type": "result", "result": text, "status": status}
+        # Only a succeeded run carries output; others leave the reason on stderr.
+        result: StreamData = {
+            "type": "result",
+            "result": output if isinstance(output, str) else "",
+            "status": "success" if data.get("status") == "succeeded" else "error",
+        }
         error = data.get("error")
         message = error.get("message") if isinstance(error, dict) else None
         if isinstance(message, str):
@@ -280,7 +275,8 @@ class StreamProcessor:
             status = "error"
         elif stop_reason == "stop":
             status = "success"
-        elif stop_reason in ("length", "aborted"):
+        # Pi pairs an aborted stop with errorMessage, so only a length stop is partial.
+        elif stop_reason == "length":
             status = "partial"
         else:
             status = "error"
