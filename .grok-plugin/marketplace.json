@@ -9,7 +9,7 @@
     {
       "name": "runner",
       "description": "Run agent definitions as sub-agents across multiple AI coding CLIs.",
-      "version": "0.13.4",
+      "version": "0.14.0",
       "category": "development",
       "source": {
         "source": "local",
@@ -25,7 +25,10 @@
         "glm",
         "kimi",
         "opencode",
-        "command-code"
+        "command-code",
+        "minimax-code",
+        "mcode",
+        "pi"
       ]
     }
   ]

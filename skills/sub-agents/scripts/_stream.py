@@ -84,6 +84,7 @@ class StreamProcessor:
         self.gemini_parts: list[str] = []
         self.codex_messages: list[str] = []
         self.opencode_parts: list[str] = []
+        self.pi_message: StreamData | None = None
 
     def _process_gemini_line(self, data: StreamData) -> bool:
         if data.get("type") == "message" and data.get("role") == "assistant":
@@ -230,6 +231,72 @@ class StreamProcessor:
         self.result_json = data
         return True
 
+    def _process_mcode_line(self, data: StreamData) -> bool:
+        if data.get("type") != "exec.result":
+            return False
+
+        backend_status = data.get("status")
+        output = data.get("output")
+        text = output if isinstance(output, str) else ""
+        if backend_status == "succeeded":
+            status = "success"
+        elif backend_status in ("timeout", "cancelled", "limit_exceeded") and text:
+            status = "partial"
+        else:
+            # Unfinished runs usually omit output and leave the reason on stderr.
+            status = "error"
+
+        result: StreamData = {"type": "result", "result": text, "status": status}
+        error = data.get("error")
+        message = error.get("message") if isinstance(error, dict) else None
+        if isinstance(message, str):
+            result["error"] = message
+        self.result_json = result
+        return True
+
+    def _process_pi_line(self, data: StreamData) -> bool:
+        message = data.get("message")
+        if data.get("type") == "message_end" and isinstance(message, dict):
+            if message.get("role") == "assistant":
+                self.pi_message = message
+            return False
+        # Pi can retry or recover after a failed message until it settles.
+        if data.get("type") != "agent_settled" or self.pi_message is None:
+            return False
+
+        message = self.pi_message
+        stop_reason = message.get("stopReason")
+        text_parts: list[str] = []
+        content = message.get("content")
+        if isinstance(content, list):
+            for part in content:
+                if isinstance(part, dict) and part.get("type") == "text":
+                    text = part.get("text")
+                    if isinstance(text, str):
+                        text_parts.append(text)
+
+        error_message = message.get("errorMessage")
+        if isinstance(error_message, str) and error_message:
+            status = "error"
+        elif stop_reason == "stop":
+            status = "success"
+        elif stop_reason in ("length", "aborted"):
+            status = "partial"
+        else:
+            status = "error"
+
+        result: StreamData = {
+            "type": "result",
+            "result": "".join(text_parts),
+            "status": status,
+        }
+        if isinstance(stop_reason, str):
+            result["stop_reason"] = stop_reason
+        if isinstance(error_message, str) and error_message:
+            result["error"] = error_message
+        self.result_json = result
+        return True
+
     def process_line(self, line: str) -> bool:
         """Process one line. Returns True when a terminal event is reached."""
         line = line.strip()
@@ -287,4 +354,6 @@ _LINE_PROCESSORS: dict[str, Callable[[StreamProcessor, StreamData], bool]] = {
     "gemini": StreamProcessor._process_gemini_line,
     "opencode": StreamProcessor._process_opencode_line,
     "command-code": StreamProcessor._process_command_code_line,
+    "mcode": StreamProcessor._process_mcode_line,
+    "pi": StreamProcessor._process_pi_line,
 }

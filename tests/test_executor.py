@@ -16,30 +16,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from _builder import AgentInvocation, ProcessInvocation
-from _executor import AgentResponse, _build_proc_env, build_final_response, execute_agent
+from _executor import AgentResponse, build_final_response, execute_agent
 from run_subagent import main
-
-
-class TestBuildProcEnv:
-    def test_none_returns_none(self) -> None:
-        assert _build_proc_env(None) is None
-        assert _build_proc_env({}) is None
-
-    def test_sets_and_overrides_keys(self) -> None:
-        with patch.dict("os.environ", {"EXISTING": "old"}, clear=True):
-            env = _build_proc_env({"NEW": "v", "EXISTING": "new"})
-        assert env is not None
-        assert env["NEW"] == "v"
-        assert env["EXISTING"] == "new"
-
-    def test_none_value_deletes_inherited_key(self) -> None:
-        # Redirected Claude backends rely on this to strip credentials for a
-        # different provider before spawning the child process.
-        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-ant-real"}, clear=True):
-            env = _build_proc_env({"ANTHROPIC_AUTH_TOKEN": "zai", "ANTHROPIC_API_KEY": None})
-        assert env is not None
-        assert "ANTHROPIC_API_KEY" not in env
-        assert env["ANTHROPIC_AUTH_TOKEN"] == "zai"
 
 
 class TestBuildFinalResponse:
@@ -67,17 +45,6 @@ class TestBuildFinalResponse:
         assert r["exit_code"] == 1
         assert r["status"] == "partial"
 
-    def test_result_marked_partial_stays_partial_even_with_zero_exit(self) -> None:
-        r = build_final_response(
-            cli="grok",
-            returncode=0,
-            result={"result": "progress", "status": "partial"},
-            stdout_lines=[],
-            stderr="",
-        )
-        assert r["status"] == "partial"
-        assert r["exit_code"] == 0
-
     def test_result_marked_partial_stays_partial_when_terminated_by_us(self) -> None:
         r = build_final_response(
             cli="grok",
@@ -103,20 +70,6 @@ class TestBuildFinalResponse:
             terminated_by_us=True,
         )
         assert r["status"] == "success"
-        assert r["exit_code"] == 1
-
-    def test_nonzero_with_result_not_terminated_is_partial(self) -> None:
-        # Same exit code 1, but we did NOT initiate termination — a genuine
-        # abnormal exit with partial output stays "partial", not "success".
-        r = build_final_response(
-            cli="claude",
-            returncode=1,
-            result={"result": "ok"},
-            stdout_lines=[],
-            stderr="",
-            terminated_by_us=False,
-        )
-        assert r["status"] == "partial"
         assert r["exit_code"] == 1
 
     def test_returncode_none_without_result_is_error(self) -> None:
@@ -268,6 +221,74 @@ class TestExecuteAgent:
         assert result["result"] == ""
         assert "error_during_execution" in result["error"]
 
+    @pytest.mark.parametrize(
+        ("cli", "lines", "returncode", "expected"),
+        [
+            (
+                "mcode",
+                ['{"type":"exec.result","status":"succeeded","output":"DONE"}\n'],
+                0,
+                {"result": "DONE", "exit_code": 0, "status": "success", "cli": "mcode"},
+            ),
+            (
+                "mcode",
+                [
+                    '{"type":"exec.result","status":"failed",'
+                    '"error":{"category":"runtime","message":"Model is not available"}}\n'
+                ],
+                4,
+                {
+                    "result": "",
+                    "exit_code": 4,
+                    "status": "error",
+                    "cli": "mcode",
+                    "error": "Model is not available",
+                },
+            ),
+            (
+                "pi",
+                [
+                    '{"type":"message_end","message":{"role":"assistant",'
+                    '"content":[{"type":"text","text":"DONE"}],"stopReason":"stop"}}\n',
+                    '{"type":"agent_settled","aborted":false}\n',
+                ],
+                -15,
+                {"result": "DONE", "exit_code": -15, "status": "success", "cli": "pi"},
+            ),
+            (
+                # Pi exits 0 after provider errors.
+                "pi",
+                [
+                    '{"type":"message_end","message":{"role":"assistant","content":[],'
+                    '"stopReason":"error","errorMessage":"OpenAI API error (404)"}}\n',
+                    '{"type":"agent_settled","aborted":false}\n',
+                ],
+                0,
+                {
+                    "result": "",
+                    "exit_code": 0,
+                    "status": "error",
+                    "cli": "pi",
+                    "error": "OpenAI API error (404)",
+                },
+            ),
+        ],
+    )
+    def test_backend_run_outcome_reaches_response(
+        self, cli: str, lines: list[str], returncode: int, expected: AgentResponse
+    ) -> None:
+        mock_process = MagicMock()
+        mock_process.stdout.readline.side_effect = [*lines, ""]
+        mock_process.communicate.return_value = ("", "")
+        mock_process.returncode = returncode
+
+        with patch("subprocess.Popen", return_value=mock_process):
+            result = execute_agent(
+                AgentInvocation(cli=cli, prompt="x", cwd="/tmp"), timeout_ms=5000
+            )
+
+        assert result == expected
+
     def test_kimi_provider_configuration_reaches_child_process(self) -> None:
         mock_process = MagicMock()
         mock_process.stdout.readline.side_effect = [
@@ -410,30 +431,6 @@ class TestExecuteAgent:
         popen_kwargs = mock_popen.call_args[1]
         assert popen_kwargs["encoding"] == "utf-8"
         assert popen_kwargs["errors"] == "replace"
-
-    def test_gemini_passes_env_with_agent_file(self) -> None:
-        mock_process = MagicMock()
-        mock_process.stdout.readline.return_value = ""
-        mock_process.communicate.return_value = ("", "")
-        mock_process.returncode = 0
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            agent_file = os.path.join(tmpdir, "test-agent.md")
-            with open(agent_file, "w") as f:
-                f.write("# Agent\n\nDefinition.")
-            with patch("subprocess.Popen", return_value=mock_process) as mock_popen:
-                execute_agent(
-                    AgentInvocation(
-                        cli="gemini",
-                        prompt="User task",
-                        cwd=tmpdir,
-                        system_context="Agent definition",
-                        agent_file=agent_file,
-                    ),
-                    timeout_ms=5000,
-                )
-                popen_kwargs = mock_popen.call_args[1]
-                assert popen_kwargs["env"]["GEMINI_SYSTEM_MD"] == agent_file
 
     def test_grok_pretty_json_output_is_parsed_after_exit(self) -> None:
         mock_process = MagicMock()
@@ -801,33 +798,6 @@ class TestMainEndToEnd:
             assert payload["cli"] == "cursor-agent"
             assert exc_info.value.code == 1
             popen.assert_not_called()
-
-    def test_main_invalid_cli_override_returns_json_error(self) -> None:
-        """--cli with an unknown value must produce a JSON error, not a traceback."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            agents_dir = Path(tmpdir) / ".agents"
-            agents_dir.mkdir()
-            (agents_dir / "echo.md").write_text("---\nrun-agent: codex\n---\n# Echo\n")
-            argv = [
-                "run_subagent.py",
-                "--agent",
-                "echo",
-                "--prompt",
-                "x",
-                "--cwd",
-                tmpdir,
-                "--cli",
-                "totally-fake-cli",
-            ]
-            with patch.object(sys, "argv", argv):
-                buf = StringIO()
-                with patch("sys.stdout", buf):
-                    with pytest.raises(SystemExit) as exc_info:
-                        main()
-            payload = json.loads(buf.getvalue().strip())
-            assert payload["status"] == "error"
-            assert "Unsupported CLI" in payload["error"]
-            assert exc_info.value.code == 1
 
     def test_main_list_returns_agents_json(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

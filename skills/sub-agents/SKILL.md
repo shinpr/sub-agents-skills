@@ -6,7 +6,7 @@ allowed-tools: Bash Read
 
 # Sub-Agents - External CLI AI Task Delegation
 
-Spawns external CLI AIs (codex, claude, cursor-agent, glm, kimi, grok, antigravity, gemini, opencode, command-code) as isolated sub-agents with dedicated context.
+Spawns external CLI AIs (codex, claude, cursor-agent, glm, kimi, grok, antigravity, gemini, opencode, command-code, mcode, pi) as isolated sub-agents with dedicated context.
 
 Workflow: discover available definitions, select one from the user request, execute it, and handle the JSON response.
 
@@ -152,7 +152,12 @@ override; execution fails with a corrective error when neither is specified.
 
 | Field | Values | Description |
 |-------|--------|-------------|
-| `run-agent` | `codex`, `claude`, `cursor-agent`, `glm`, `kimi`, `grok`, `antigravity`, `gemini`, `opencode`, `command-code` | Which CLI executes this agent |
+| `run-agent` | `codex`, `claude`, `cursor-agent`, `glm`, `kimi`, `grok`, `antigravity`, `gemini`, `opencode`, `command-code`, `mcode`, `pi` | Which CLI executes this agent |
 | `model` | Backend-specific model name (optional) | Model passed to the selected CLI; omit to use its configured default |
 | `effort` | Backend/model-specific reasoning level or OpenCode variant (optional) | Advanced: forwarded as an opaque value. Confirm support for the selected model before setting; omit to use its default. Unsupported on `cursor-agent` and `gemini` |
 | `permission` | `read-only`, `safe-edit` (default), `yolo` | `read-only` for investigation, `safe-edit` for workspace edits, or `yolo` to bypass approvals and sandboxing |
+
+Backend-specific `permission` behavior:
+
+- `mcode`: `read-only` and `safe-edit` both use `--permission smart`, which allows direct edits. A tool call that `smart` denies leaves the run going, so the run can still return `success`. `yolo` uses `--permission full`.
+- `pi`: `read-only` enables only `read`, `grep`, `find`, and `ls`, so the agent has no shell or MCP tools. `safe-edit` and `yolo` both enable Pi's default tools, including `bash`, `edit`, and `write`.

@@ -80,6 +80,12 @@ def build_command(cli: str, prompt: str) -> tuple[str, list[str]]:
             prompt,
         ]
 
+    if cli == "mcode":
+        return "mcode", ["exec", "--output-format", "json", "--", prompt]
+
+    if cli == "pi":
+        return "pi", ["--no-session", "--mode", "json", "--print", "--", prompt]
+
     if cli == "cursor-agent":
         # Cursor credentials stay out of argv.
         return "cursor-agent", ["--output-format", "json", "-p", prompt]
@@ -138,6 +144,18 @@ _COMMAND_CODE_PERMISSIONS = {
     "yolo": ("--yolo",),
 }
 
+_MCODE_PERMISSIONS = {
+    "read-only": ("--permission", "smart"),
+    "safe-edit": ("--permission", "smart"),
+    "yolo": ("--permission", "full"),
+}
+
+_PI_PERMISSIONS = {
+    "read-only": ("--tools", "read,grep,find,ls", "--exclude-tools", "mcp__*"),
+    "safe-edit": (),
+    "yolo": (),
+}
+
 
 def permission_flags(cli: str, permission: str) -> list[str]:
     try:
@@ -193,7 +211,13 @@ def _build_claude_args(inv: AgentInvocation) -> ProcessInvocation:
     perm = _invocation_flags(inv)
     system_prompt = f"cwd: {inv.cwd}\n\n{inv.system_context}"
     command, base_args = build_command(inv.cli, inv.prompt)
-    return ProcessInvocation(command, perm + ["--append-system-prompt", system_prompt] + base_args)
+    if inv.cli == "mcode":
+        # MCode rejects run options placed before the exec subcommand.
+        run, *base_args = base_args
+        args = [run, *perm, "--append-system-prompt", system_prompt, *base_args]
+    else:
+        args = perm + ["--append-system-prompt", system_prompt] + base_args
+    return ProcessInvocation(command, args)
 
 
 def _build_gemini_args(inv: AgentInvocation) -> ProcessInvocation:
@@ -389,6 +413,8 @@ _BACKEND_SPECS = {
     "gemini": BackendSpec(_build_gemini_args, _GEMINI_PERMISSIONS, None),
     "opencode": BackendSpec(_build_opencode_args, _OPENCODE_PERMISSIONS, "--variant"),
     "command-code": BackendSpec(_build_concatenated_args, _COMMAND_CODE_PERMISSIONS, "--effort"),
+    "mcode": BackendSpec(_build_claude_args, _MCODE_PERMISSIONS, "--effort"),
+    "pi": BackendSpec(_build_claude_args, _PI_PERMISSIONS, "--thinking"),
 }
 
 

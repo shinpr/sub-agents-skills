@@ -87,6 +87,8 @@ class TestBuildInvocationArgs:
             ("antigravity", "gemini-3.7-flash-high"),
             ("opencode", "test-provider/test-model"),
             ("command-code", "claude-sonnet-4-6"),
+            ("mcode", "provider/model"),
+            ("pi", "provider/model"),
         ],
     )
     def test_model_is_forwarded_to_every_backend(self, cli: str, model: str) -> None:
@@ -115,6 +117,8 @@ class TestBuildInvocationArgs:
             ("antigravity", "high", ("--effort", "high")),
             ("opencode", "vendor-level", ("--variant", "vendor-level")),
             ("command-code", "high", ("--effort", "high")),
+            ("mcode", "high", ("--effort", "high")),
+            ("pi", "high", ("--thinking", "high")),
         ],
     )
     def test_effort_is_forwarded_without_value_validation(
@@ -139,6 +143,41 @@ class TestBuildInvocationArgs:
     def test_unsupported_effort_fails_instead_of_being_ignored(self, cli: str) -> None:
         with pytest.raises(ValueError, match=rf"selected backend: '{cli}'"):
             build_invocation_args(_inv(cli, effort="high"))
+
+    def test_mcode_places_options_after_exec_and_prompt_after_separator(self) -> None:
+        process = build_invocation_args(
+            _inv("mcode", prompt="- list files", permission="read-only")
+        )
+        assert process.command == "mcode"
+        assert process.args == [
+            "exec",
+            "--permission",
+            "smart",
+            "--append-system-prompt",
+            "cwd: /test/cwd\n\nAgent definition",
+            "--output-format",
+            "json",
+            "--",
+            "- list files",
+        ]
+
+    def test_pi_read_only_limits_tools_and_places_prompt_after_separator(self) -> None:
+        process = build_invocation_args(_inv("pi", prompt="- list files", permission="read-only"))
+        assert process.command == "pi"
+        assert process.args == [
+            "--tools",
+            "read,grep,find,ls",
+            "--exclude-tools",
+            "mcp__*",
+            "--append-system-prompt",
+            "cwd: /test/cwd\n\nAgent definition",
+            "--no-session",
+            "--mode",
+            "json",
+            "--print",
+            "--",
+            "- list files",
+        ]
 
     def test_codex_effort_is_safely_encoded_as_toml_string(self) -> None:
         assert effort_flags("codex", 'high" -c unsafe=true') == [

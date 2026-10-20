@@ -10,7 +10,7 @@
       "name": "runner",
       "source": "./",
       "description": "Run agent definitions as sub-agents across multiple AI coding CLIs.",
-      "version": "0.13.4",
+      "version": "0.14.0",
       "author": {
         "name": "Shinsuke Kagawa",
         "url": "https://github.com/shinpr"
@@ -25,7 +25,10 @@
         "kimi",
         "grok",
         "opencode",
-        "command-code"
+        "command-code",
+        "minimax-code",
+        "mcode",
+        "pi"
       ]
     }
   ]

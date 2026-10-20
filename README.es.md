@@ -175,6 +175,8 @@ Define `run-agent` en cada agente. Su valor determina el backend; algunos backen
 | `gemini` | Gemini CLI (compatibilidad) | `gemini` |
 | `opencode` | OpenCode | `opencode` |
 | `command-code` | Command Code | `command-code` |
+| `mcode` | MiniMax Code | `mcode` |
+| `pi` | Pi | `pi` |
 
 Instala únicamente las CLI que vayas a utilizar. Para los modelos de Google se recomienda Antigravity CLI 1.1.12 o posterior; las configuraciones existentes de Gemini CLI siguen siendo compatibles.
 
@@ -211,7 +213,7 @@ Describe su propósito en una frase.
 
 | Campo | Valores | Descripción |
 |-------|---------|-------------|
-| `run-agent` | `codex`, `claude`, `cursor-agent`, `glm`, `kimi`, `grok`, `antigravity`, `gemini`, `opencode`, `command-code` | Backend que ejecuta el agente |
+| `run-agent` | `codex`, `claude`, `cursor-agent`, `glm`, `kimi`, `grok`, `antigravity`, `gemini`, `opencode`, `command-code`, `mcode`, `pi` | Backend que ejecuta el agente |
 | `model` | Nombre de modelo específico del backend (opcional) | Se pasa a la CLI elegida; si se omite, se utiliza su valor configurado por defecto |
 | `effort` | Valor admitido por el backend y el modelo (opcional) | Sobrescribe el nivel de razonamiento; si se omite, se utiliza el valor por defecto |
 | `permission` | `read-only`, `safe-edit` (por defecto), `yolo` | Nivel de aprobación y aislamiento con el que se ejecuta el subagente |
@@ -222,8 +224,8 @@ Describe su propósito en una frase.
 
 **Niveles de permisos:**
 
-- `read-only`: modo de investigación y revisión que impide las ediciones directas cuando el backend lo admite; el comportamiento del shell depende del backend y este modo no es un límite de seguridad (codex `-s read-only` / claude `--permission-mode plan` / cursor `--mode plan --sandbox enabled` / grok `--sandbox read-only` / antigravity `--mode plan --sandbox` / gemini `--approval-mode plan` / reglas de permisos de OpenCode / modo plan de Command Code)
-- `safe-edit`: modo de edición no interactivo predeterminado (codex `-s workspace-write` + `approval_policy=never` / claude `--permission-mode acceptEdits` / cursor `--trust --sandbox enabled` / grok `--sandbox workspace` / antigravity `--mode accept-edits --sandbox` / gemini `--approval-mode auto_edit` / reglas del runner para OpenCode y Command Code)
+- `read-only`: modo de investigación y revisión que impide las ediciones directas cuando el backend lo admite; el comportamiento del shell depende del backend y este modo no es un límite de seguridad (codex `-s read-only` / claude `--permission-mode plan` / cursor `--mode plan --sandbox enabled` / grok `--sandbox read-only` / antigravity `--mode plan --sandbox` / gemini `--approval-mode plan` / reglas de permisos de OpenCode / modo plan de Command Code / MCode `--permission smart`, que sigue permitiendo ediciones directas / Pi `--tools read,grep,find,ls` sin herramientas MCP)
+- `safe-edit`: modo de edición no interactivo predeterminado (codex `-s workspace-write` + `approval_policy=never` / claude `--permission-mode acceptEdits` / cursor `--trust --sandbox enabled` / grok `--sandbox workspace` / antigravity `--mode accept-edits --sandbox` / gemini `--approval-mode auto_edit` / reglas del runner para OpenCode y Command Code / MCode `--permission smart`, que no detiene la ejecución cuando deniega una llamada a una herramienta / herramientas predeterminadas de Pi)
 - `yolo`: omite todas las aprobaciones y el aislamiento; úsalo únicamente con tareas y entornos de confianza.
 
 Los subagentes no tienen entrada estándar, por lo que el runner usa los modos no interactivos de cada backend. Las opciones de permisos de las distintas CLI no son equivalentes; el aislamiento real depende de cada herramienta. Por ejemplo, el sandbox de Cursor ejecuta los comandos de shell compatibles dentro de un entorno aislado, mientras que `--mode plan` establece la restricción de solo lectura.
@@ -328,7 +330,7 @@ Para cambiarla: `export SUB_AGENTS_DIR=/custom/path`
 | `--prompt` | Sí* | Descripción de la tarea que se delegará |
 | `--cwd` | Sí* | Directorio de trabajo como ruta absoluta |
 | `--timeout` | No | Tiempo límite en milisegundos; valor predeterminado: 600000 |
-| `--cli` | No | Fuerza una CLI: `codex`, `claude`, `cursor-agent`, `glm`, `kimi`, `grok`, `antigravity`, `gemini`, `opencode`, `command-code` |
+| `--cli` | No | Fuerza una CLI: `codex`, `claude`, `cursor-agent`, `glm`, `kimi`, `grok`, `antigravity`, `gemini`, `opencode`, `command-code`, `mcode`, `pi` |
 
 \* Obligatorio cuando no se utiliza `--list`.
 
@@ -403,6 +405,39 @@ Instala Command Code y configura un modelo. Usa `command-code login` para los mo
 
 </details>
 
+<a id="mcode"></a>
+<details>
+<summary>MiniMax Code</summary>
+
+Instala MiniMax Code e inicia sesión con `mcode login`, o configura un
+proveedor. Define `run-agent: mcode`; `model` y `effort` son opcionales.
+
+En modo headless, MCode no tiene ninguna opción que bloquee las ediciones
+directas, así que `read-only` y `safe-edit` usan `--permission smart`, y
+`yolo` usa `--permission full`. Cuando `smart` deniega una llamada a una
+herramienta que requiere aprobación, la ejecución sigue y puede terminar
+igualmente con `success`. En las pruebas, el modelo volvió a intentar una
+escritura denegada fuera del espacio de trabajo con `cd ..` y una ruta
+relativa.
+
+</details>
+
+<a id="pi"></a>
+<details>
+<summary>Pi</summary>
+
+Instala Pi y configura un proveedor y un modelo. Define `run-agent: pi`;
+`model` y `effort` son opcionales. El runner pasa `effort` como nivel
+`--thinking` de Pi.
+
+Pi no tiene modos de permisos ni aislamiento. Con `read-only`, el runner
+habilita solo las herramientas `read`, `grep`, `find` y `ls`, así que el agente
+no puede ejecutar comandos de shell ni herramientas MCP. `safe-edit` y `yolo`
+usan las herramientas predeterminadas de Pi, entre ellas `bash`, `edit` y
+`write`.
+
+</details>
+
 ## Seguridad
 
 Las definiciones de agentes funcionan como prompts de sistema y controlan directamente lo que hace el subagente. Una definición maliciosa podría ordenarle leer archivos confidenciales, ejecutar comandos dañinos o enviar datos fuera del entorno.
@@ -426,6 +461,8 @@ graph LR
     B -.-> GM["Gemini CLI<br/>(compatibilidad)"]
     B --> I["OpenCode"]
     B --> CC["Command Code"]
+    B --> MC["MiniMax Code"]
+    B --> PI["Pi"]
     I --> J["Proveedor/modelo seleccionado<br/>(gestionado · clave propia · local)"]
     CC --> J
     style B fill:#f5f5f5,stroke:#333
@@ -471,6 +508,13 @@ Instala OpenCode y configura un proveedor y un modelo predeterminado. Antes de u
 **Command Code:**
 Instala Command Code y configura un modelo. Comprueba la autenticación con `command-code status`.
 
+**MiniMax Code:**
+Ejecuta `mcode login` o configura un proveedor con tu propia clave de API.
+
+**Pi:**
+Antes de usar el backend, comprueba las credenciales del proveedor con
+`pi auth check --model <provider/model>`.
+
 ### No se encuentra el agente
 
 Comprueba lo siguiente:
@@ -490,6 +534,8 @@ Instala la CLI necesaria:
 - Google Antigravity: `curl -fsSL https://antigravity.google/cli/install.sh | bash`
 - OpenCode: `brew install anomalyco/tap/opencode`
 - Command Code: `npm install -g command-code`
+- MiniMax Code: `curl -fsSL https://filecdn.minimax.chat/public/install.sh | bash`
+- Pi: `npm install -g --ignore-scripts @earendil-works/pi-coding-agent`
 
 Si necesitas Gemini CLI, instálala con `npm install -g @google/gemini-cli`.
 

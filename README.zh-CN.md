@@ -175,6 +175,8 @@ Sub-Agents Skills 将代理的职责与执行后端分离。Markdown 文件定�
 | `gemini` | Gemini CLI（兼容模式） | `gemini` |
 | `opencode` | OpenCode | `opencode` |
 | `command-code` | Command Code | `command-code` |
+| `mcode` | MiniMax Code | `mcode` |
+| `pi` | Pi | `pi` |
 
 只需安装实际要使用的 CLI。使用 Google 模型时，建议选择 Antigravity CLI 1.1.12 或更高版本；已有的 Gemini CLI 配置仍然受支持。
 
@@ -211,7 +213,7 @@ permission: safe-edit
 
 | 字段 | 可选值 | 说明 |
 |------|--------|------|
-| `run-agent` | `codex`、`claude`、`cursor-agent`、`glm`、`kimi`、`grok`、`antigravity`、`gemini`、`opencode`、`command-code` | 执行该代理的后端 |
+| `run-agent` | `codex`、`claude`、`cursor-agent`、`glm`、`kimi`、`grok`、`antigravity`、`gemini`、`opencode`、`command-code`、`mcode`、`pi` | 执行该代理的后端 |
 | `model` | 后端支持的模型名称（可选） | 传给所选 CLI 的模型；省略时使用其已配置的默认值 |
 | `effort` | 后端或模型支持的值（可选） | 覆盖推理强度；省略时使用后端或模型的默认值 |
 | `permission` | `read-only`、`safe-edit`（默认）、`yolo` | 子代理运行时使用的审批与沙箱级别 |
@@ -222,8 +224,8 @@ permission: safe-edit
 
 **权限级别：**
 
-- `read-only`：用于调查和审查，并在后端支持时阻止直接编辑；shell 行为取决于后端，此模式并非安全边界（codex `-s read-only` / claude `--permission-mode plan` / cursor `--mode plan --sandbox enabled` / grok `--sandbox read-only` / antigravity `--mode plan --sandbox` / gemini `--approval-mode plan` / OpenCode 权限规则 / Command Code `--permission-mode plan`）
-- `safe-edit`：默认的非交互式编辑模式（codex `-s workspace-write` + `approval_policy=never` / claude `--permission-mode acceptEdits` / cursor `--trust --sandbox enabled` / grok `--sandbox workspace` / antigravity `--mode accept-edits --sandbox` / gemini `--approval-mode auto_edit` / OpenCode 权限规则 / Command Code `--yolo --permission-mode auto-accept`）
+- `read-only`：用于调查和审查，并在后端支持时阻止直接编辑；shell 行为取决于后端，此模式并非安全边界（codex `-s read-only` / claude `--permission-mode plan` / cursor `--mode plan --sandbox enabled` / grok `--sandbox read-only` / antigravity `--mode plan --sandbox` / gemini `--approval-mode plan` / OpenCode 权限规则 / Command Code `--permission-mode plan` / MCode `--permission smart`，仍允许直接编辑 / Pi `--tools read,grep,find,ls`，并禁用 MCP 工具）
+- `safe-edit`：默认的非交互式编辑模式（codex `-s workspace-write` + `approval_policy=never` / claude `--permission-mode acceptEdits` / cursor `--trust --sandbox enabled` / grok `--sandbox workspace` / antigravity `--mode accept-edits --sandbox` / gemini `--approval-mode auto_edit` / OpenCode 权限规则 / Command Code `--yolo --permission-mode auto-accept` / MCode `--permission smart`，拒绝工具调用后不会终止运行 / Pi 默认工具）
 - `yolo`：绕过所有审批和沙箱限制；只应在你信任的任务和环境中使用。
 
 子代理没有标准输入，因此 runner 会以非交互模式调用各个后端。不同 CLI 的权限参数并不等价，实际隔离保证取决于所选 CLI。例如，Cursor 的沙箱会将受支持的 shell 命令限制在沙箱内，而 `--mode plan` 则提供只读约束。
@@ -328,7 +330,7 @@ permission: read-only
 | `--prompt` | 是* | 要委派的任务说明 |
 | `--cwd` | 是* | 工作目录（必须是绝对路径） |
 | `--timeout` | 否 | 超时时间，单位为毫秒（默认：600000） |
-| `--cli` | 否 | 强制指定 CLI：`codex`、`claude`、`cursor-agent`、`glm`、`kimi`、`grok`、`antigravity`、`gemini`、`opencode`、`command-code` |
+| `--cli` | 否 | 强制指定 CLI：`codex`、`claude`、`cursor-agent`、`glm`、`kimi`、`grok`、`antigravity`、`gemini`、`opencode`、`command-code`、`mcode`、`pi` |
 
 \* 不使用 `--list` 时必填
 
@@ -405,6 +407,33 @@ runner 会通过 `--model` 传递 `model`，并通过 OpenCode 的 `--variant` �
 
 </details>
 
+<a id="mcode"></a>
+<details>
+<summary>MiniMax Code</summary>
+
+安装 MiniMax Code，然后运行 `mcode login` 登录，或配置一个提供商。
+设置 `run-agent: mcode`；`model` 和 `effort` 均为可选项。
+
+MCode 的非交互模式没有可以阻止直接编辑的设置，因此 `read-only` 和
+`safe-edit` 都使用 `--permission smart`，`yolo` 使用 `--permission full`。
+`smart` 拒绝需要审批的工具调用后，运行会继续，最终仍可能返回 `success`。
+测试中，工作区外的写入被拒绝后，模型改用 `cd ..` 和相对路径重试。
+
+</details>
+
+<a id="pi"></a>
+<details>
+<summary>Pi</summary>
+
+安装 Pi 并配置提供商和模型。设置 `run-agent: pi`；`model` 和 `effort`
+均为可选项。runner 会把 `effort` 作为 Pi 的 `--thinking` 级别传入。
+
+Pi 没有权限模式，也没有沙箱。使用 `read-only` 时，runner 只启用 `read`、
+`grep`、`find` 和 `ls` 工具，代理无法运行 shell 命令或 MCP 工具。
+`safe-edit` 和 `yolo` 都使用 Pi 的默认工具，包括 `bash`、`edit` 和 `write`。
+
+</details>
+
 ## 安全说明
 
 代理定义会作为系统提示词，直接控制子代理的行为。恶意代理定义可能会指示子代理读取敏感文件、执行有害命令或将数据泄露到外部。
@@ -428,6 +457,8 @@ graph LR
     B -.-> GM["Gemini CLI<br/>(兼容模式)"]
     B --> I["OpenCode"]
     B --> CC["Command Code"]
+    B --> MC["MiniMax Code"]
+    B --> PI["Pi"]
     I --> J["所选提供商/模型<br/>(平台托管 · 自带密钥 · 本地模型)"]
     CC --> J
     style B fill:#f5f5f5,stroke:#333
@@ -473,6 +504,12 @@ skills/sub-agents/
 **Command Code：**
 安装 Command Code 并配置模型。使用前运行 `command-code status` 检查身份验证状态。
 
+**MiniMax Code：**
+运行 `mcode login`，或配置一个使用自有 API 密钥的提供商。
+
+**Pi：**
+使用前运行 `pi auth check --model <provider/model>` 检查提供商凭据。
+
 ### 找不到代理
 
 请检查：
@@ -492,6 +529,8 @@ skills/sub-agents/
 - Google Antigravity：`curl -fsSL https://antigravity.google/cli/install.sh | bash`
 - OpenCode：`brew install anomalyco/tap/opencode`
 - Command Code：`npm install -g command-code`
+- MiniMax Code：`curl -fsSL https://filecdn.minimax.chat/public/install.sh | bash`
+- Pi：`npm install -g --ignore-scripts @earendil-works/pi-coding-agent`
 
 如需使用 Gemini CLI，请通过 `npm install -g @google/gemini-cli` 安装。
 

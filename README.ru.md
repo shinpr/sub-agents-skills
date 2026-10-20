@@ -175,6 +175,8 @@ Sub-Agents Skills отделяет роль агента от бэкенда, н
 | `gemini` | Gemini CLI (режим совместимости) | `gemini` |
 | `opencode` | OpenCode | `opencode` |
 | `command-code` | Command Code | `command-code` |
+| `mcode` | MiniMax Code | `mcode` |
+| `pi` | Pi | `pi` |
 
 Устанавливайте только те CLI, которыми собираетесь пользоваться. Для моделей Google рекомендуется Antigravity CLI 1.1.12 или новее; существующие конфигурации Gemini CLI продолжат работать.
 
@@ -211,7 +213,7 @@ permission: safe-edit
 
 | Поле | Значения | Описание |
 |------|----------|----------|
-| `run-agent` | `codex`, `claude`, `cursor-agent`, `glm`, `kimi`, `grok`, `antigravity`, `gemini`, `opencode`, `command-code` | Бэкенд, который запускает агента |
+| `run-agent` | `codex`, `claude`, `cursor-agent`, `glm`, `kimi`, `grok`, `antigravity`, `gemini`, `opencode`, `command-code`, `mcode`, `pi` | Бэкенд, который запускает агента |
 | `model` | Имя модели для выбранного бэкенда (необязательно) | Передаётся выбранному CLI; если поле опущено, используется настроенная по умолчанию модель |
 | `effort` | Значение, поддерживаемое бэкендом и моделью (необязательно) | Переопределяет уровень рассуждений; если поле опущено, используется значение по умолчанию |
 | `permission` | `read-only`, `safe-edit` (по умолчанию), `yolo` | Режим подтверждений и песочницы для субагента |
@@ -222,8 +224,8 @@ permission: safe-edit
 
 **Уровни доступа:**
 
-- `read-only`: режим исследования и ревью, запрещающий прямое редактирование там, где это поддерживает бэкенд; поведение shell зависит от бэкенда, и этот режим не является границей безопасности (codex `-s read-only` / claude `--permission-mode plan` / cursor `--mode plan --sandbox enabled` / grok `--sandbox read-only` / antigravity `--mode plan --sandbox` / gemini `--approval-mode plan` / правила разрешений OpenCode / режим plan в Command Code)
-- `safe-edit`: стандартный неинтерактивный режим редактирования (codex `-s workspace-write` + `approval_policy=never` / claude `--permission-mode acceptEdits` / cursor `--trust --sandbox enabled` / grok `--sandbox workspace` / antigravity `--mode accept-edits --sandbox` / gemini `--approval-mode auto_edit` / правила разрешений раннера для OpenCode и Command Code)
+- `read-only`: режим исследования и ревью, запрещающий прямое редактирование там, где это поддерживает бэкенд; поведение shell зависит от бэкенда, и этот режим не является границей безопасности (codex `-s read-only` / claude `--permission-mode plan` / cursor `--mode plan --sandbox enabled` / grok `--sandbox read-only` / antigravity `--mode plan --sandbox` / gemini `--approval-mode plan` / правила разрешений OpenCode / режим plan в Command Code / MCode `--permission smart`, который всё равно разрешает прямое редактирование / Pi `--tools read,grep,find,ls` без MCP-инструментов)
+- `safe-edit`: стандартный неинтерактивный режим редактирования (codex `-s workspace-write` + `approval_policy=never` / claude `--permission-mode acceptEdits` / cursor `--trust --sandbox enabled` / grok `--sandbox workspace` / antigravity `--mode accept-edits --sandbox` / gemini `--approval-mode auto_edit` / правила разрешений раннера для OpenCode и Command Code / MCode `--permission smart`, который не останавливает запуск, если отклоняет вызов инструмента / стандартные инструменты Pi)
 - `yolo`: отключает все подтверждения и песочницу; используйте только для задач и окружений, которым доверяете.
 
 У субагентов нет стандартного ввода, поэтому раннер запускает бэкенды в неинтерактивном режиме. Режимы доступа в разных CLI не полностью эквивалентны, а гарантии изоляции зависят от конкретного инструмента. Например, песочница Cursor выполняет поддерживаемые команды оболочки в изолированной среде, а `--mode plan` задаёт режим только для чтения.
@@ -328,7 +330,7 @@ permission: read-only
 | `--prompt` | Да* | Описание делегируемой задачи |
 | `--cwd` | Да* | Рабочий каталог, абсолютный путь |
 | `--timeout` | Нет | Тайм-аут в миллисекундах, по умолчанию 600000 |
-| `--cli` | Нет | Принудительно выбрать CLI: `codex`, `claude`, `cursor-agent`, `glm`, `kimi`, `grok`, `antigravity`, `gemini`, `opencode`, `command-code` |
+| `--cli` | Нет | Принудительно выбрать CLI: `codex`, `claude`, `cursor-agent`, `glm`, `kimi`, `grok`, `antigravity`, `gemini`, `opencode`, `command-code`, `mcode`, `pi` |
 
 \* Обязательно, если не используется `--list`.
 
@@ -403,6 +405,37 @@ permission: safe-edit
 
 </details>
 
+<a id="mcode"></a>
+<details>
+<summary>MiniMax Code</summary>
+
+Установите MiniMax Code и войдите командой `mcode login` или настройте
+провайдера. Укажите `run-agent: mcode`; поля `model` и `effort` необязательны.
+
+В headless-режиме у MCode нет настройки, запрещающей прямое редактирование,
+поэтому `read-only` и `safe-edit` работают с `--permission smart`, а `yolo`
+работает с `--permission full`. Если `smart` отклоняет вызов инструмента,
+требующий подтверждения, запуск продолжается и всё равно может завершиться
+со статусом `success`. В тестах модель повторила отклонённую запись за
+пределами рабочей области через `cd ..` и относительный путь.
+
+</details>
+
+<a id="pi"></a>
+<details>
+<summary>Pi</summary>
+
+Установите Pi и настройте провайдера и модель. Укажите `run-agent: pi`; поля
+`model` и `effort` необязательны. Значение `effort` раннер передаёт в Pi как
+уровень `--thinking`.
+
+В Pi нет режимов разрешений и песочницы. Для `read-only` раннер включает только
+инструменты `read`, `grep`, `find` и `ls`, поэтому агент не может запускать
+shell-команды и MCP-инструменты. `safe-edit` и `yolo` работают со
+стандартными инструментами Pi, включая `bash`, `edit` и `write`.
+
+</details>
+
 ## Безопасность
 
 Определения агентов становятся системными промптами и напрямую управляют действиями субагента. Вредоносное определение может потребовать прочитать конфиденциальные файлы, выполнить опасные команды или отправить данные третьей стороне.
@@ -426,6 +459,8 @@ graph LR
     B -.-> GM["Gemini CLI<br/>(режим совместимости)"]
     B --> I["OpenCode"]
     B --> CC["Command Code"]
+    B --> MC["MiniMax Code"]
+    B --> PI["Pi"]
     I --> J["Выбранный провайдер/модель<br/>(платформа · свой ключ · локально)"]
     CC --> J
     style B fill:#f5f5f5,stroke:#333
@@ -471,6 +506,13 @@ skills/sub-agents/
 **Command Code:**
 Установите Command Code и настройте модель. Проверьте аутентификацию командой `command-code status`.
 
+**MiniMax Code:**
+Выполните `mcode login` или настройте провайдера со своим API-ключом.
+
+**Pi:**
+Перед использованием бэкенда проверьте учётные данные провайдера командой
+`pi auth check --model <provider/model>`.
+
 ### Агент не найден
 
 Проверьте следующее:
@@ -490,6 +532,8 @@ skills/sub-agents/
 - Google Antigravity: `curl -fsSL https://antigravity.google/cli/install.sh | bash`
 - OpenCode: `brew install anomalyco/tap/opencode`
 - Command Code: `npm install -g command-code`
+- MiniMax Code: `curl -fsSL https://filecdn.minimax.chat/public/install.sh | bash`
+- Pi: `npm install -g --ignore-scripts @earendil-works/pi-coding-agent`
 
 Для Gemini CLI используйте `npm install -g @google/gemini-cli`.
 

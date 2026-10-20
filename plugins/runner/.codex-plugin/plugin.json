@@ -1,6 +1,6 @@
 {
   "name": "runner",
-  "version": "0.13.4",
+  "version": "0.14.0",
   "description": "Run agent definitions as sub-agents across multiple AI coding CLIs.",
   "author": {
     "name": "Shinsuke Kagawa",
@@ -23,13 +23,16 @@
     "antigravity",
     "gemini",
     "opencode",
-    "command-code"
+    "command-code",
+    "minimax-code",
+    "mcode",
+    "pi"
   ],
   "skills": "./skills/",
   "interface": {
     "displayName": "Runner",
     "shortDescription": "Sub-agent runner for multiple AI CLIs.",
-    "longDescription": "Runs agent definitions as sub-agents on external CLI AIs (Codex, Claude Code, Cursor CLI, GLM, Kimi, Grok Build, Google Antigravity, Gemini CLI, OpenCode, or Command Code) with isolated context. Define agents once in markdown and run them on any supported backend from a single host session.",
+    "longDescription": "Runs agent definitions as sub-agents on external CLI AIs (Codex, Claude Code, Cursor CLI, GLM, Kimi, Grok Build, Google Antigravity, Gemini CLI, OpenCode, Command Code, MiniMax Code, or Pi) with isolated context. Define agents once in markdown and run them on any supported backend from a single host session.",
     "developerName": "Shinsuke Kagawa",
     "category": "Developer Tools",
     "capabilities": [

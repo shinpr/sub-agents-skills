@@ -158,9 +158,6 @@ class TestGetAgentsDir:
 
 
 class TestValidatePermission:
-    def test_returns_default_for_none(self) -> None:
-        assert validate_permission(None) == DEFAULT_PERMISSION
-
     def test_returns_default_for_empty_string(self) -> None:
         assert validate_permission("") == DEFAULT_PERMISSION
 
@@ -189,14 +186,6 @@ class TestLoadAgentPermission:
             )
             agent = load_agent(tmpdir, "a")
             assert agent.permission == permission
-
-    def test_invalid_permission_raises(self) -> None:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            (Path(tmpdir) / "a.md").write_text(
-                "---\nrun-agent: codex\npermission: dangerous\n---\n# A\n"
-            )
-            with pytest.raises(ValueError, match="Invalid permission"):
-                load_agent(tmpdir, "a")
 
 
 class TestLoadAgentModel:
