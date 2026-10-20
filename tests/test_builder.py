@@ -179,6 +179,10 @@ class TestBuildInvocationArgs:
             "- list files",
         ]
 
+    def test_pi_prompt_starting_with_at_is_not_read_as_a_file(self) -> None:
+        process = build_invocation_args(_inv("pi", prompt="@src/app.ts review"))
+        assert process.args[-1] == " @src/app.ts review"
+
     def test_codex_effort_is_safely_encoded_as_toml_string(self) -> None:
         assert effort_flags("codex", 'high" -c unsafe=true') == [
             "-c",

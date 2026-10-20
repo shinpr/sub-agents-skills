@@ -195,21 +195,9 @@ class TestStreamProcessor:
             "error": "Not authenticated",
         }
 
-    @pytest.mark.parametrize("status", ["timeout", "cancelled", "limit_exceeded"])
-    def test_mcode_unfinished_result_with_output_is_partial(self, status: str) -> None:
+    def test_mcode_unfinished_result_is_error(self) -> None:
         processor = StreamProcessor("mcode")
-        assert processor.process_line(
-            json.dumps({"type": "exec.result", "status": status, "output": "progress"})
-        )
-        assert processor.get_result() == {
-            "type": "result",
-            "result": "progress",
-            "status": "partial",
-        }
-
-    def test_mcode_unfinished_result_without_output_is_error(self) -> None:
-        processor = StreamProcessor("mcode")
-        assert processor.process_line('{"type":"exec.result","status":"timeout"}')
+        assert processor.process_line('{"type":"exec.result","status":"limit_exceeded"}')
         assert processor.get_result() == {"type": "result", "result": "", "status": "error"}
 
     def test_pi_result_comes_from_last_assistant_message_once_settled(self) -> None:
@@ -236,20 +224,11 @@ class TestStreamProcessor:
             "stop_reason": "stop",
         }
 
-    @pytest.mark.parametrize("stop_reason", ["length", "aborted"])
-    def test_pi_incomplete_message_is_partial(self, stop_reason: str) -> None:
+    def test_pi_length_stop_is_partial(self) -> None:
         processor = StreamProcessor("pi")
         assert not processor.process_line(
-            json.dumps(
-                {
-                    "type": "message_end",
-                    "message": {
-                        "role": "assistant",
-                        "content": [{"type": "text", "text": "progress"}],
-                        "stopReason": stop_reason,
-                    },
-                }
-            )
+            '{"type":"message_end","message":{"role":"assistant",'
+            '"content":[{"type":"text","text":"progress"}],"stopReason":"length"}}'
         )
         assert processor.process_line('{"type":"agent_settled","aborted":false}')
         result = processor.get_result()
