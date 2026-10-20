@@ -455,12 +455,13 @@ graph LR
     B --> K["Kimi"]
     B --> F["Google Antigravity<br/>(Gemini 模型)"]
     B -.-> GM["Gemini CLI<br/>(兼容模式)"]
+    B --> MC["MiniMax Code"]
     B --> I["OpenCode"]
     B --> CC["Command Code"]
-    B --> MC["MiniMax Code"]
     B --> PI["Pi"]
     I --> J["所选提供商/模型<br/>(平台托管 · 自带密钥 · 本地模型)"]
     CC --> J
+    PI --> J
     style B fill:#f5f5f5,stroke:#333
 ```
 
