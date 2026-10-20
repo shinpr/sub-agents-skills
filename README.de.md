@@ -459,12 +459,13 @@ graph LR
     B --> K["Kimi"]
     B --> F["Google Antigravity<br/>(Gemini-Modelle)"]
     B -.-> GM["Gemini CLI<br/>(Kompatibilitätsmodus)"]
+    B --> MC["MiniMax Code"]
     B --> I["OpenCode"]
     B --> CC["Command Code"]
-    B --> MC["MiniMax Code"]
     B --> PI["Pi"]
     I --> J["Gewählter Anbieter / gewähltes Modell<br/>(verwaltet · eigener Schlüssel · lokal)"]
     CC --> J
+    PI --> J
     style B fill:#f5f5f5,stroke:#333
 ```
 
