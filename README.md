@@ -1,5 +1,9 @@
 # Sub-Agents Skills
 
+<!-- yarkr:badges:start -->
+[![Indexed on Yarkr](https://api.yarkr.com/functions/v1/api/api/v1/badges/repos/shinpr/sub-agents-skills/version.svg)](https://yarkr.com/arks/shinpr/sub-agents-skills)
+<!-- yarkr:badges:end -->
+
 English | [简体中文](README.zh-CN.md) | [Русский](README.ru.md) | [Deutsch](README.de.md) | [Español](README.es.md)
 
 [![Codex CLI](https://img.shields.io/badge/Codex%20CLI-Plugin-10a37f)](https://developers.openai.com/codex/cli)
@@ -115,6 +119,38 @@ Use the code-reviewer agent to review the authentication changes.
 ```
 
 The parent tool invokes the agent with the selected backend and returns its result.
+
+<!-- yarkr:install:start -->
+## Install with Yarkr
+
+This repo is indexed on [Yarkr](https://yarkr.com/arks/shinpr/sub-agents-skills) as the ark [shinpr/sub-agents-skills](https://yarkr.com/arks/shinpr/sub-agents-skills), so its skills install into Claude Code, Codex, Cursor and other agent harnesses with one command.
+
+### CLI
+
+Install the whole ark, which Yarkr keeps equal to this repo:
+
+```bash
+npx yarkr-cli sync shinpr/sub-agents-skills
+```
+
+Or add individual skills:
+
+```bash
+npx yarkr-cli add skill:shinpr/sub-agents-skills/sub-agents
+```
+
+No Node.js? `curl -fsSL https://yarkr.com/install.sh | sh` (macOS, Linux) or `irm https://yarkr.com/install.ps1 | iex` (Windows PowerShell) installs `yarkr` as a standalone binary; then type `yarkr` in place of `npx yarkr-cli`.
+
+### MCP
+
+Connect your agent to the ark over MCP:
+
+```bash
+npx yarkr-cli mcp add shinpr/sub-agents-skills
+```
+
+Or point any MCP client at `https://api.yarkr.com/functions/v1/api/mcp/o/shinpr/sub-agents-skills`.
+<!-- yarkr:install:end -->
 
 ## Why Use It?
 
